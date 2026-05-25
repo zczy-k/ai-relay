@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
     configured: Boolean(provider.envKeyField ? process.env[provider.envKeyField] : stats[id]?.total),
     keyCount: stats[id]?.total || 0,
     availableKeys: stats[id]?.available || 0,
+    envKeyField: provider.envKeyField,
     models: provider.models || [],
   }));
 

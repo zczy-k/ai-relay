@@ -447,6 +447,10 @@ export default function AdminPage() {
             setupData={setupData}
             loading={v21Loading}
             onRunChecks={() => fetchSetup(true)}
+            onOpenKeys={(providerId) => {
+              if (providerId) setSelectedProvider(providerId);
+              setActiveTab('keys');
+            }}
           />
         )}
         {activeTab === 'overview' && (

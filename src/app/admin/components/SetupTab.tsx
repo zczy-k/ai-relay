@@ -2,7 +2,15 @@ import type { ProviderInfo } from '../types';
 
 interface SetupData {
   checks: { adminKey: boolean; relayKey: boolean; kv: boolean; providerKeys: boolean };
-  providers: Array<{ id: string; name: string; configured: boolean; keyCount: number; availableKeys: number; models?: ProviderInfo['models'] }>;
+  providers: Array<{
+    id: string;
+    name: string;
+    configured: boolean;
+    keyCount: number;
+    availableKeys: number;
+    envKeyField?: string;
+    models?: ProviderInfo['models'];
+  }>;
   timestamp: string;
 }
 
@@ -11,23 +19,110 @@ interface Props {
   setupData: SetupData | null;
   loading: boolean;
   onRunChecks: () => void;
+  onOpenKeys: (providerId?: string) => void;
 }
 
-function CheckRow({ label, ok, hint, t }: { label: string; ok: boolean; hint: string; t: any }) {
+interface CheckGuide {
+  title: string;
+  steps: string[];
+  envKeys?: string[];
+  actionLabel?: string;
+  onAction?: () => void;
+}
+
+function CheckRow({ label, ok, hint, guide, t }: { label: string; ok: boolean; hint: string; guide?: CheckGuide; t: any }) {
   return (
-    <div className="stat-card" style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center' }}>
-      <div>
-        <div style={{ color: '#fff', fontWeight: 700 }}>{label}</div>
-        <div style={{ color: '#9ca3af', fontSize: '0.82rem', marginTop: '0.25rem' }}>{hint}</div>
+    <div className="stat-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'flex-start' }}>
+        <div>
+          <div style={{ color: '#fff', fontWeight: 700 }}>{label}</div>
+          <div style={{ color: '#9ca3af', fontSize: '0.82rem', marginTop: '0.25rem', lineHeight: 1.5 }}>{hint}</div>
+        </div>
+        <span style={{ color: ok ? '#34d399' : '#f87171', fontWeight: 800, whiteSpace: 'nowrap' }}>{ok ? t.setupPassed : t.setupFailed}</span>
       </div>
-      <span style={{ color: ok ? '#34d399' : '#f87171', fontWeight: 800 }}>{ok ? t.setupPassed : t.setupFailed}</span>
+      {!ok && guide && (
+        <div style={{
+          borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+          paddingTop: '0.75rem',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.65rem',
+        }}>
+          <div style={{ color: '#fbbf24', fontSize: '0.82rem', fontWeight: 700 }}>{guide.title}</div>
+          {guide.envKeys && guide.envKeys.length > 0 && (
+            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+              {guide.envKeys.map((envKey) => (
+                <code
+                  key={envKey}
+                  style={{
+                    color: '#bfdbfe',
+                    background: 'rgba(59, 130, 246, 0.12)',
+                    border: '1px solid rgba(59, 130, 246, 0.22)',
+                    borderRadius: '6px',
+                    padding: '0.18rem 0.42rem',
+                    fontSize: '0.78rem',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {envKey}
+                </code>
+              ))}
+            </div>
+          )}
+          <ol style={{ margin: 0, paddingLeft: '1.1rem', color: '#d1d5db', fontSize: '0.82rem', lineHeight: 1.6 }}>
+            {guide.steps.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+          {guide.actionLabel && guide.onAction && (
+            <button
+              className="tab-btn"
+              onClick={guide.onAction}
+              style={{ alignSelf: 'flex-start', padding: '0.45rem 0.75rem', fontSize: '0.8rem' }}
+            >
+              {guide.actionLabel}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-export default function SetupTab({ t, setupData, loading, onRunChecks }: Props) {
+export default function SetupTab({ t, setupData, loading, onRunChecks, onOpenKeys }: Props) {
   const checks = setupData?.checks;
   const providers = setupData?.providers || [];
+  const firstUnconfiguredProvider = providers.find((p) => !p.configured && p.keyCount === 0);
+  const providerEnvKeys = providers
+    .map((p) => p.envKeyField)
+    .filter((envKey): envKey is string => Boolean(envKey))
+    .slice(0, 4);
+
+  const guides = {
+    adminKey: {
+      title: t.setupAdminKeyFixTitle,
+      envKeys: ['RELAY_ADMIN_KEY'],
+      steps: [t.setupAdminKeyStep1, t.setupAdminKeyStep2, t.setupAdminKeyStep3],
+    },
+    relayKey: {
+      title: t.setupRelayKeyFixTitle,
+      envKeys: ['RELAY_API_KEY'],
+      steps: [t.setupRelayKeyStep1, t.setupRelayKeyStep2, t.setupRelayKeyStep3],
+    },
+    kv: {
+      title: t.setupKvFixTitle,
+      envKeys: ['KV_REST_API_URL', 'KV_REST_API_TOKEN'],
+      steps: [t.setupKvStep1, t.setupKvStep2, t.setupKvStep3],
+    },
+    providerKeys: {
+      title: t.setupProviderKeysFixTitle,
+      envKeys: providerEnvKeys,
+      steps: [t.setupProviderKeysStep1, t.setupProviderKeysStep2, t.setupProviderKeysStep3],
+      actionLabel: t.setupOpenKeysAction,
+      onAction: () => onOpenKeys(firstUnconfiguredProvider?.id),
+    },
+  };
+
   return (
     <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -40,10 +135,10 @@ export default function SetupTab({ t, setupData, loading, onRunChecks }: Props) 
 
       {checks ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem' }}>
-          <CheckRow label="RELAY_ADMIN_KEY" ok={checks.adminKey} hint={t.setupAdminKeyHint} t={t} />
-          <CheckRow label="RELAY_API_KEY" ok={checks.relayKey} hint={t.setupRelayKeyHint} t={t} />
-          <CheckRow label="Vercel KV" ok={checks.kv} hint={checks.kv ? t.setupKvReady : t.setupKvFallback} t={t} />
-          <CheckRow label={t.setupProviderKeys} ok={checks.providerKeys} hint={t.setupProviderKeysHint} t={t} />
+          <CheckRow label="RELAY_ADMIN_KEY" ok={checks.adminKey} hint={t.setupAdminKeyHint} guide={guides.adminKey} t={t} />
+          <CheckRow label="RELAY_API_KEY" ok={checks.relayKey} hint={t.setupRelayKeyHint} guide={guides.relayKey} t={t} />
+          <CheckRow label="Vercel KV" ok={checks.kv} hint={checks.kv ? t.setupKvReady : t.setupKvFallback} guide={guides.kv} t={t} />
+          <CheckRow label={t.setupProviderKeys} ok={checks.providerKeys} hint={t.setupProviderKeysHint} guide={guides.providerKeys} t={t} />
         </div>
       ) : (
         <div className="stat-card" style={{ color: '#9ca3af' }}>{t.setupEmpty}</div>
@@ -56,7 +151,9 @@ export default function SetupTab({ t, setupData, loading, onRunChecks }: Props) 
             <div key={p.id} className="stat-card" style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center' }}>
               <div>
                 <strong style={{ color: '#e5e7eb' }}>{p.name}</strong>
-                <div style={{ color: '#9ca3af', fontSize: '0.8rem' }}>{p.id} · keys {p.availableKeys}/{p.keyCount}</div>
+                <div style={{ color: '#9ca3af', fontSize: '0.8rem' }}>
+                  {p.id} · {p.envKeyField || t.setupNoEnvKeyField} · keys {p.availableKeys}/{p.keyCount}
+                </div>
               </div>
               <span style={{ color: p.configured || p.keyCount > 0 ? '#34d399' : '#f87171' }}>
                 {p.configured || p.keyCount > 0 ? t.statusOk : t.statusNoKeys}
