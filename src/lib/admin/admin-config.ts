@@ -736,6 +736,9 @@ export async function deleteCustomProvider(name: string): Promise<void> {
     throw new Error('KV storage not configured — cannot delete custom provider');
   }
   const custom = await getCustomProviders(true);
+  if (!custom[name]) {
+    throw new Error(`Custom provider not found: ${name}`);
+  }
   delete custom[name];
   await kv.set('admin:custom_providers', JSON.stringify(custom));
   // Clean up keys and fallbacks entries

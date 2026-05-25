@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { tryDecodeBase64 } from '../lib/admin/admin-config';
+import {
+  deleteCustomProvider,
+  getCustomProviders,
+  saveCustomProvider,
+  tryDecodeBase64,
+} from '../lib/admin/admin-config';
+import { clearProvidersCache } from '../lib/providers/resolver';
+import type { ProviderConfig } from '../lib/providers/types';
 
 describe('smoke test', () => {
   it('should pass basic assertion', () => {
@@ -46,3 +53,31 @@ describe('tryDecodeBase64 tests', () => {
   });
 });
 
+describe('custom provider deletion tests', () => {
+  it('deletes by provider id and rejects display names that do not exist', async () => {
+    const provider: ProviderConfig = {
+      name: 'custom_delete_test',
+      displayName: 'Custom Delete Test',
+      baseUrl: 'https://example.com/v1',
+      headerFormat: 'openai',
+      envKeyField: 'CUSTOM_DELETE_TEST_KEYS',
+      modelPrefixes: ['custom-delete-'],
+      models: [],
+      isCustom: true,
+    };
+
+    await saveCustomProvider(provider);
+
+    await expect(deleteCustomProvider(provider.displayName)).rejects.toThrow('Custom provider not found');
+
+    let customProviders = await getCustomProviders(true);
+    expect(customProviders[provider.name]).toBeTruthy();
+
+    await deleteCustomProvider(provider.name);
+
+    customProviders = await getCustomProviders(true);
+    expect(customProviders[provider.name]).toBeUndefined();
+
+    clearProvidersCache();
+  });
+});

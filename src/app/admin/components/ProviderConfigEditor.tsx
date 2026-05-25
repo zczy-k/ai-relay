@@ -144,7 +144,7 @@ export default function ProviderConfigEditor({
               <button
                 onClick={() => {
                   if (currentProviderObj) {
-                    onDeleteCustomProvider(currentProviderObj.name);
+                    onDeleteCustomProvider(currentProviderObj.id);
                   }
                 }}
                 style={{
