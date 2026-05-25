@@ -20,7 +20,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org/)
 [![Edge Runtime](https://img.shields.io/badge/Edge_Runtime-⚡-black?logo=vercel)](https://vercel.com/docs/functions/edge-functions)
-[![Vercel KV](https://img.shields.io/badge/Vercel_KV-Redis-black?logo=redis)](https://vercel.com/docs/storage/vercel-kv)
+[![Upstash Redis](https://img.shields.io/badge/Upstash_Redis-Redis-black?logo=redis)](https://vercel.com/marketplace/upstash)
 
 [English](README_EN.md) · [中文](README.md)
 
@@ -89,16 +89,16 @@ Click the **Deploy with Vercel** button above, fill in 3 environment variables:
 
 Click **Deploy** and wait for it to finish.
 
-**Step 2 — Enable Vercel KV Storage and Connect to Your Project**
+**Step 2 — Enable Upstash for Redis and Connect to Your Project**
 
 1. Go to [Vercel Dashboard](https://vercel.com/dashboard) and open the project you just deployed.
 2. In the left sidebar, choose **Storage**, then click **Create Database**.
-3. Select **KV**, create the database, then **Connect to your project** in the popup.
+3. Select **Upstash for Redis**. When creating the database, choose the **Free** plan and keep the other options at their defaults, then **Connect to your project** in the popup.
 4. Verify Vercel has injected the following environment variables automatically:
    - `KV_REST_API_URL`
    - `KV_REST_API_TOKEN`
 
-> Note: If you used the one-click Deploy with Vercel button, Vercel usually injects KV environment variables automatically. If you deployed manually or created a new KV later, check **Settings → Environment Variables** to confirm these variables exist.
+> Note: The project uses the Upstash Redis REST API. After Vercel connects Upstash to your project, it usually injects `KV_REST_API_URL` and `KV_REST_API_TOKEN` automatically. If you deployed manually or created Redis later, check **Settings → Environment Variables** to confirm these variables exist.
 
 **Step 3 — Verify**
 
@@ -213,7 +213,7 @@ Generate time-limited keys from the Admin dashboard:
 | `XIAOMI_KEYS` | Xiaomi API Keys | ⬜ |
 
 > [!NOTE]
-> Provider keys are best configured via the Admin panel (stored in Vercel KV), not as environment variables.
+> Provider keys are best configured via the Admin panel (stored in Upstash Redis), not as environment variables.
 
 ### Supported Providers
 
@@ -232,7 +232,7 @@ Client → Edge Runtime (global, <50ms latency)
               ├─ Circuit Breaker
               ├─ Multi-Level Fallback (Provider → Key)
               ├─ Key Rotation (Round-Robin + 429 backoff)
-              └─ Vercel KV (keys, quotas, usage)
+              └─ Upstash Redis (keys, quotas, usage)
 ```
 
 ## 📊 Admin Dashboard

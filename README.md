@@ -20,7 +20,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org/)
 [![Edge Runtime](https://img.shields.io/badge/Edge_Runtime-⚡-black?logo=vercel)](https://vercel.com/docs/functions/edge-functions)
-[![Vercel KV](https://img.shields.io/badge/Vercel_KV-Redis-black?logo=redis)](https://vercel.com/docs/storage/vercel-kv)
+[![Upstash Redis](https://img.shields.io/badge/Upstash_Redis-Redis-black?logo=redis)](https://vercel.com/marketplace/upstash)
 
 [English](README_EN.md) · [中文](README.md)
 
@@ -89,16 +89,16 @@
 
 点击 **Deploy**，等待部署完成。
 
-**第 2 步 — 启用 Vercel KV Storage 并关联项目**
+**第 2 步 — 启用 Upstash for Redis 并关联项目**
 
 1. 打开 [Vercel Dashboard](https://vercel.com/dashboard)，进入刚部署的项目。
 2. 在左侧菜单选择 **Storage**，点击 **Create Database**。
-3. 选择 **KV**，创建数据库，并在弹出窗口中 **Connect to your project**（将 KV 绑定到当前项目）。
+3. 选择 **Upstash for Redis**，创建数据库时选择 **Free** 套餐，其他选项保持默认即可，然后在弹出窗口中 **Connect to your project**（将 Redis 绑定到当前项目）。
 4. 确认 Vercel 已为当前环境自动注入以下变量：
    - `KV_REST_API_URL`
    - `KV_REST_API_TOKEN`
 
-> 说明：如果使用 **Deploy with Vercel** 一键部署，通常 Vercel 会把 KV 环境变量自动注入到项目中；若你手动部署或后续新建 KV，请在 **Settings → Environment Variables** 中确认这些变量已存在。
+> 说明：项目使用 Upstash Redis 的 REST API。Vercel 连接 Upstash 后通常会自动注入 `KV_REST_API_URL` 和 `KV_REST_API_TOKEN`；若你手动部署或后续新建 Redis，请在 **Settings → Environment Variables** 中确认这些变量已存在。
 
 **第 3 步 — 验证**
 
@@ -213,7 +213,7 @@ for chunk in stream:
 | `XIAOMI_KEYS` | Xiaomi API Keys | ⬜ |
 
 > [!NOTE]
-> Provider 密钥建议通过 Admin 后台配置（存储在 Vercel KV 中），而非写入环境变量。
+> Provider 密钥建议通过 Admin 后台配置（存储在 Upstash Redis 中），而非写入环境变量。
 
 ### 支持的 Provider
 
@@ -232,7 +232,7 @@ Client → Edge Runtime (全球分发, <50ms 延迟)
               ├─ 熔断器
               ├─ 多级 Fallback (Provider → Key)
               ├─ Key 轮换 (Round-Robin + 429 退避)
-              └─ Vercel KV (密钥, 配额, 用量)
+              └─ Upstash Redis (密钥, 配额, 用量)
 ```
 
 ## 📊 Admin 后台

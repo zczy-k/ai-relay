@@ -137,7 +137,7 @@ export default function SetupTab({ t, setupData, loading, onRunChecks, onOpenKey
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem' }}>
           <CheckRow label="RELAY_ADMIN_KEY" ok={checks.adminKey} hint={t.setupAdminKeyHint} guide={guides.adminKey} t={t} />
           <CheckRow label="RELAY_API_KEY" ok={checks.relayKey} hint={t.setupRelayKeyHint} guide={guides.relayKey} t={t} />
-          <CheckRow label="Vercel KV" ok={checks.kv} hint={checks.kv ? t.setupKvReady : t.setupKvFallback} guide={guides.kv} t={t} />
+          <CheckRow label={t.setupKvLabel} ok={checks.kv} hint={checks.kv ? t.setupKvReady : t.setupKvFallback} guide={guides.kv} t={t} />
           <CheckRow label={t.setupProviderKeys} ok={checks.providerKeys} hint={t.setupProviderKeysHint} guide={guides.providerKeys} t={t} />
         </div>
       ) : (
