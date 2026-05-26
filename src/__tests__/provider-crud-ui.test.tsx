@@ -91,6 +91,8 @@ describe('iteration one provider CRUD UI helpers', () => {
           reuseExistingModel: '复用现有模型',
           fetchModels: '从供应商拉取',
           fetchingModels: '拉取中...',
+          fetchedProviderModels: '供应商支持的模型',
+          addAllFetchedModels: '一键添加全部',
           addModel: '添加模型',
           modelId: '模型 ID',
           modelDisplayName: '模型显示名',
@@ -125,6 +127,9 @@ describe('iteration one provider CRUD UI helpers', () => {
     expect(html).toContain('API Key');
     expect(html).toContain('连通性测试');
     expect(html).toContain('从供应商拉取');
+    expect(html).toContain('供应商支持的模型');
+    expect(html).toContain('一键添加全部');
+    expect(html).not.toContain('复用现有模型');
     expect(html).toContain('overscroll-behavior:contain');
     expect(html).toContain('touch-action:pan-y');
   });

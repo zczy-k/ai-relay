@@ -55,6 +55,7 @@ export default function CustomProviderModal({
     status: 'idle',
     message: '',
   });
+  const [fetchedProviderModels, setFetchedProviderModels] = useState<any[]>([]);
 
   const applyTemplateToForm = (template: ProviderTemplate) => {
     setSelectedTemplateId(template.id);
@@ -67,6 +68,7 @@ export default function CustomProviderModal({
     setTestModelId(form.modelPrefixes[0] ? `${form.modelPrefixes[0]}demo` : '');
     setTestState({ status: 'idle', message: '' });
     setModelFetchState({ status: 'idle', message: '' });
+    setFetchedProviderModels([]);
   };
 
   // Sync edit mode fields
@@ -82,6 +84,7 @@ export default function CustomProviderModal({
       setFormHeaderFormat(editingCustomProvider.headerFormat || 'openai');
       setFormModelPrefixes((editingCustomProvider.modelPrefixes || []).join(', '));
       setFormModels(editingCustomProvider.models || []);
+      setFetchedProviderModels([]);
     } else {
       const defaultTemplate = PROVIDER_TEMPLATES[0];
       setSelectedTemplateId(defaultTemplate.id);
@@ -96,6 +99,7 @@ export default function CustomProviderModal({
       setTestModelId(form.modelPrefixes[0] ? `${form.modelPrefixes[0]}demo` : '');
       setTestState({ status: 'idle', message: '' });
       setModelFetchState({ status: 'idle', message: '' });
+      setFetchedProviderModels([]);
     }
   }, [editingCustomProvider, customProviderModalOpen]);
 
@@ -126,23 +130,8 @@ export default function CustomProviderModal({
     setFormModels(formModels.filter((_, i) => i !== index));
   };
 
-  // Compute all existing models across providers for cloning
-  const allExistingModels = data.providers.flatMap((p) => {
-    const models = p.models || [];
-    return models.map((m) => {
-      return {
-        id: m.id,
-        displayName: m.displayName,
-        contextWindow: m.contextWindow,
-        maxOutput: m.maxOutput,
-        supportsStream: m.supportsStream,
-        supportsVision: m.supportsVision,
-        supportsTools: m.supportsTools,
-        pricing: m.pricing,
-        providerName: p.name
-      };
-    });
-  });
+  // data is still accepted for modal contract parity with parent components.
+  void data;
 
   const draftProvider = buildDraftProviderFromForm({
     id: formId,
@@ -164,24 +153,38 @@ export default function CustomProviderModal({
     customTemplate: lang === 'zh' ? '自定义 / Custom' : 'Custom',
     fetchModels: t.fetchModels || (lang === 'zh' ? '从供应商拉取' : 'Fetch from provider'),
     fetchingModels: t.fetchingModels || (lang === 'zh' ? '拉取中...' : 'Fetching...'),
+    fetchedProviderModels: t.fetchedProviderModels || (lang === 'zh' ? '供应商支持的模型' : 'Provider-supported models'),
+    addAllFetchedModels: t.addAllFetchedModels || (lang === 'zh' ? '一键添加全部' : 'Add all'),
   };
 
-  const mergeFetchedModels = (fetchedModels: any[]) => {
-    const existing = new Map(formModels.map((model) => [model.id, model]));
-    for (const model of fetchedModels) {
-      if (!model?.id) continue;
-      existing.set(model.id, {
-        id: model.id,
-        displayName: model.displayName || model.id,
-        contextWindow: model.contextWindow || 128000,
-        maxOutput: model.maxOutput || 4096,
-        supportsStream: model.supportsStream ?? true,
-        supportsVision: model.supportsVision ?? false,
-        supportsTools: model.supportsTools ?? false,
-        pricing: model.pricing || { input: 0, output: 0 },
-      });
-    }
-    setFormModels(Array.from(existing.values()).sort((a, b) => String(a.id).localeCompare(String(b.id))));
+  const normalizeFetchedModel = (model: any) => ({
+    id: model.id,
+    displayName: model.displayName || model.id,
+    contextWindow: model.contextWindow || 128000,
+    maxOutput: model.maxOutput || 4096,
+    supportsStream: model.supportsStream ?? true,
+    supportsVision: model.supportsVision ?? false,
+    supportsTools: model.supportsTools ?? false,
+    pricing: model.pricing || { input: 0, output: 0 },
+  });
+
+  const handleAddFetchedModel = (model: any) => {
+    if (!model?.id) return;
+    setFormModels((current) => {
+      if (current.some((item) => item.id === model.id)) return current;
+      return [...current, normalizeFetchedModel(model)].sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    });
+  };
+
+  const handleAddAllFetchedModels = () => {
+    setFormModels((current) => {
+      const existing = new Map(current.map((model) => [model.id, model]));
+      for (const model of fetchedProviderModels) {
+        if (!model?.id || existing.has(model.id)) continue;
+        existing.set(model.id, normalizeFetchedModel(model));
+      }
+      return Array.from(existing.values()).sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    });
   };
 
   const handleFetchProviderModels = async () => {
@@ -198,7 +201,7 @@ export default function CustomProviderModal({
     try {
       const result = await onFetchProviderModels(draftProvider, apiKeyValue.trim());
       const models = Array.isArray(result?.models) ? result.models : [];
-      mergeFetchedModels(models);
+      setFetchedProviderModels(models);
       setModelFetchState({
         status: 'success',
         message: lang === 'zh' ? `已拉取 ${models.length} 个模型` : `Fetched ${models.length} models`,
@@ -514,45 +517,6 @@ export default function CustomProviderModal({
                 {t.modelsList}
               </label>
               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                {/* Reuse/Clone dropdown */}
-                <select
-                  onChange={(e) => {
-                    if (!e.target.value) return;
-                    const parsed = JSON.parse(e.target.value);
-                    setFormModels([
-                      ...formModels,
-                      {
-                        id: parsed.id,
-                        displayName: parsed.displayName,
-                        contextWindow: parsed.contextWindow,
-                        maxOutput: parsed.maxOutput || 4096,
-                        supportsStream: parsed.supportsStream ?? true,
-                        supportsVision: parsed.supportsVision ?? false,
-                        supportsTools: parsed.supportsTools ?? false,
-                        pricing: parsed.pricing || { input: 0, output: 0 }
-                      }
-                    ]);
-                    e.target.value = ''; // Reset select
-                  }}
-                  className="custom-select"
-                  style={{
-                    padding: '0.3rem 1.8rem 0.3rem 0.5rem',
-                    borderRadius: '4px',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                    backgroundColor: 'rgba(0, 0, 0, 0.25)',
-                    color: '#9ca3af',
-                    fontSize: '0.8rem',
-                    maxWidth: '200px',
-                  }}
-                >
-                  <option value="">{t.reuseExistingModel}</option>
-                  {allExistingModels.map((m, idx) => (
-                    <option key={idx} value={JSON.stringify(m)}>
-                      [{m.providerName}] {m.id}
-                    </option>
-                  ))}
-                </select>
-
                 <button
                   type="button"
                   onClick={handleFetchProviderModels}
@@ -590,6 +554,69 @@ export default function CustomProviderModal({
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '250px', overflowY: 'auto', paddingRight: '0.25rem' }}>
+              <div style={{
+                padding: '0.75rem',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(16, 185, 129, 0.06)',
+                border: '1px solid rgba(16, 185, 129, 0.18)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.55rem',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+                  <span style={{ color: '#d1fae5', fontWeight: 700, fontSize: '0.85rem' }}>
+                    {helperText.fetchedProviderModels}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleAddAllFetchedModels}
+                    disabled={fetchedProviderModels.length === 0}
+                    style={{
+                      padding: '0.3rem 0.6rem',
+                      borderRadius: '4px',
+                      border: '1px solid rgba(16, 185, 129, 0.35)',
+                      backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                      color: '#6ee7b7',
+                      cursor: fetchedProviderModels.length === 0 ? 'not-allowed' : 'pointer',
+                      fontSize: '0.78rem',
+                      opacity: fetchedProviderModels.length === 0 ? 0.55 : 1,
+                    }}
+                  >
+                    {helperText.addAllFetchedModels}
+                  </button>
+                </div>
+                {fetchedProviderModels.length > 0 ? (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                    {fetchedProviderModels.map((model) => {
+                      const alreadyAdded = formModels.some((item) => item.id === model.id);
+                      return (
+                        <button
+                          key={model.id}
+                          type="button"
+                          onClick={() => handleAddFetchedModel(model)}
+                          disabled={alreadyAdded}
+                          title={model.displayName || model.id}
+                          style={{
+                            padding: '0.25rem 0.5rem',
+                            borderRadius: '999px',
+                            border: '1px solid rgba(255,255,255,0.08)',
+                            backgroundColor: alreadyAdded ? 'rgba(148, 163, 184, 0.12)' : 'rgba(15, 23, 42, 0.55)',
+                            color: alreadyAdded ? '#94a3b8' : '#e5e7eb',
+                            cursor: alreadyAdded ? 'not-allowed' : 'pointer',
+                            fontSize: '0.74rem',
+                          }}
+                        >
+                          {model.id}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div style={{ color: '#9ca3af', fontSize: '0.78rem' }}>
+                    {lang === 'zh' ? '点击“从供应商拉取”查看支持的模型。' : 'Click “Fetch from provider” to view supported models.'}
+                  </div>
+                )}
+              </div>
               {modelFetchState.message && (
                 <div style={{
                   fontSize: '0.78rem',
