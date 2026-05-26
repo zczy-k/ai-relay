@@ -438,6 +438,65 @@ export async function getFallbackChain(
 }
 
 /**
+ * Detect circular fallback configurations using DFS.
+ * Returns the cycle path (e.g. ['openai', 'anthropic', 'openai']) if a cycle is found, otherwise null.
+ */
+export async function detectFallbackCycle(
+  providerName: string,
+  proposedChain: string[]
+): Promise<string[] | null> {
+  const { getAllProviders } = await import('../providers');
+  const allProviders = await getAllProviders();
+
+  const fallbackGraph: Record<string, string[]> = {};
+  for (const pName of Object.keys(allProviders)) {
+    if (pName === providerName) {
+      fallbackGraph[pName] = proposedChain.map((entry) => {
+        const colonIdx = entry.indexOf(':');
+        return colonIdx >= 0 ? entry.slice(0, colonIdx) : entry;
+      });
+    } else {
+      const prov = allProviders[pName];
+      const staticFallbacks = prov.fallbackProviders || (prov.fallbackProvider ? [prov.fallbackProvider] : []);
+      const chain = await getFallbackChain(pName, staticFallbacks);
+      fallbackGraph[pName] = chain.map((entry) => {
+        const colonIdx = entry.indexOf(':');
+        return colonIdx >= 0 ? entry.slice(0, colonIdx) : entry;
+      });
+    }
+  }
+
+  const visited = new Set<string>();
+  const path: string[] = [];
+  const pathSet = new Set<string>();
+
+  function dfs(node: string): string[] | null {
+    if (pathSet.has(node)) {
+      const cycleStartIdx = path.indexOf(node);
+      return [...path.slice(cycleStartIdx), node];
+    }
+    if (visited.has(node)) {
+      return null;
+    }
+    path.push(node);
+    pathSet.add(node);
+
+    const neighbors = fallbackGraph[node] || [];
+    for (const neighbor of neighbors) {
+      const cycle = dfs(neighbor);
+      if (cycle) return cycle;
+    }
+
+    path.pop();
+    pathSet.delete(node);
+    visited.add(node);
+    return null;
+  }
+
+  return dfs(providerName);
+}
+
+/**
  * Set the fallback chain for a provider.
  * Pass empty array to clear all fallbacks.
  */
@@ -445,6 +504,11 @@ export async function setFallbackChain(
   providerName: string,
   chain: string[]
 ): Promise<void> {
+  const cycle = await detectFallbackCycle(providerName, chain);
+  if (cycle) {
+    throw new Error(`Circular fallback detected: ${cycle.join(' -> ')}`);
+  }
+
   const kv = await getKV();
   if (!kv) {
     throw new Error('KV storage not configured — cannot persist fallback overrides');
@@ -942,3 +1006,433 @@ export function tryDecodeBase64(str: string): string {
   }
   return str;
 }
+
+/**
+ * Exports all configuration-related data from Vercel KV as a single JSON-serializable object.
+ */
+export async function exportBackupData(): Promise<Record<string, any>> {
+  const kv = await getKV();
+  if (!kv) {
+    throw new Error('KV storage not configured');
+  }
+
+  // 1. Get custom providers
+  const customProviders = await getCustomProviders(true);
+
+  // Get all possible provider names (static + custom)
+  const { PROVIDERS } = await import('../providers/registry');
+  const allProviderNames = Array.from(new Set([
+    ...Object.keys(PROVIDERS),
+    ...Object.keys(customProviders)
+  ]));
+
+  // 2. Fetch all keys and fallback overrides in parallel
+  const keysPayload: Record<string, string[]> = {};
+  const fallbacksPayload: Record<string, string[]> = {};
+
+  const keysPromises = allProviderNames.map(async (name) => {
+    try {
+      const keys = await getManagedKeys(name, true);
+      if (keys && keys.length > 0) {
+        keysPayload[name] = keys;
+      }
+    } catch {
+      // Ignore errors for individual provider lookups
+    }
+  });
+
+  const fallbacksPromises = allProviderNames.map(async (name) => {
+    try {
+      // Query the KV key directly to only back up custom overrides rather than static defaults
+      const raw = await kv.get(`${PREFIX.fallbacks}${name}`);
+      if (raw) {
+        const parsed = parseJsonOrArray(raw);
+        if (parsed && parsed.length > 0) {
+          fallbacksPayload[name] = parsed;
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  });
+
+  // 3. Fetch global configurations
+  const [quota, modelAliases, priorityRules, webhooks] = await Promise.all([
+    getCustomQuota(),
+    getModelAliasConfig(true),
+    getPriorityRules(true),
+    getWebhookSettings(),
+    ...keysPromises,
+    ...fallbacksPromises
+  ]);
+
+  return {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    customProviders,
+    keys: keysPayload,
+    fallbacks: fallbacksPayload,
+    quota,
+    modelAliases,
+    priorityRules,
+    webhooks
+  };
+}
+
+/**
+ * Restores configuration-related data into Vercel KV from a backup object.
+ */
+function validateCustomProviders(customProviders: any): Record<string, ProviderConfig> {
+  if (!customProviders || typeof customProviders !== 'object' || Array.isArray(customProviders)) {
+    return {};
+  }
+  const validated: Record<string, ProviderConfig> = {};
+  for (const [key, value] of Object.entries(customProviders)) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      continue;
+    }
+    const val = value as any;
+    // Essential validations to prevent resolver crash
+    if (typeof val.name !== 'string' || !/^[a-zA-Z0-9_]+$/.test(val.name)) continue;
+    if (typeof val.displayName !== 'string' || !val.displayName.trim()) continue;
+    if (typeof val.baseUrl !== 'string' || !val.baseUrl.startsWith('https://')) continue;
+    if (!Array.isArray(val.modelPrefixes) || val.modelPrefixes.length === 0) continue;
+    if (!val.modelPrefixes.every((p: any) => typeof p === 'string' && p.trim())) continue;
+    if (!['openai', 'anthropic', 'azure'].includes(val.headerFormat)) continue;
+
+    // Normalizing and building valid config
+    const config: ProviderConfig = {
+      name: val.name,
+      displayName: val.displayName.trim(),
+      baseUrl: val.baseUrl.trim(),
+      modelPrefixes: val.modelPrefixes.map((p: string) => p.trim()),
+      headerFormat: val.headerFormat as 'openai' | 'anthropic' | 'azure',
+      envKeyField: typeof val.envKeyField === 'string' ? val.envKeyField.trim() : `${val.name.toUpperCase()}_KEYS`,
+      envBaseUrlField: typeof val.envBaseUrlField === 'string' ? val.envBaseUrlField.trim() : undefined,
+      models: Array.isArray(val.models) 
+        ? val.models.filter((m: any) => m && typeof m === 'object' && typeof m.id === 'string' && typeof m.displayName === 'string') 
+        : [],
+      modelMapping: val.modelMapping && typeof val.modelMapping === 'object' && !Array.isArray(val.modelMapping) ? val.modelMapping : undefined,
+      isCustom: true,
+    };
+    validated[val.name] = config;
+  }
+  return validated;
+}
+
+/**
+ * Restores configuration-related data into Vercel KV from a backup object.
+ */
+export async function importBackupData(data: Record<string, any>): Promise<void> {
+  const kv = await getKV();
+  if (!kv) {
+    throw new Error('KV storage not configured');
+  }
+
+  if (data.version !== 1) {
+    throw new Error('Invalid backup version or format');
+  }
+
+  // Load existing custom providers before overwriting them
+  const oldCustomProviders = await getCustomProviders(true);
+
+  // 1. Restore custom providers (only if customProviders is in data)
+  if ('customProviders' in data) {
+    if (data.customProviders && typeof data.customProviders === 'object') {
+      const validated = validateCustomProviders(data.customProviders);
+      await kv.set('admin:custom_providers', JSON.stringify(validated));
+    } else {
+      await kv.del('admin:custom_providers');
+    }
+
+    // Clear cache for custom providers immediately so subsequent validation works
+    try {
+      const { clearProvidersCache } = await import('../providers/resolver');
+      clearProvidersCache();
+    } catch {
+      // ignore
+    }
+  }
+
+  // 2. Restore custom priority rules
+  if ('priorityRules' in data) {
+    if (data.priorityRules) {
+      await savePriorityRules(data.priorityRules);
+    } else {
+      await kv.del(PREFIX.priorityRules);
+    }
+  }
+
+  // 3. Restore model aliases
+  if ('modelAliases' in data) {
+    if (data.modelAliases) {
+      await saveModelAliasConfig(data.modelAliases);
+    } else {
+      await kv.del(PREFIX.modelAliases);
+    }
+  }
+
+  // 4. Restore webhooks
+  if ('webhooks' in data) {
+    if (data.webhooks) {
+      await saveWebhookSettings(data.webhooks);
+    } else {
+      await kv.del(WEBHOOK_PREFIX);
+    }
+  }
+
+  // 5. Restore custom quota
+  if ('quota' in data) {
+    if (data.quota) {
+      await setCustomQuota(data.quota);
+    } else {
+      await clearCustomQuota();
+    }
+  }
+
+  // 6. Clean up and restore keys and fallbacks in KV (only if present in backup)
+  if ('keys' in data || 'fallbacks' in data) {
+    const { PROVIDERS } = await import('../providers/registry');
+    const newCustomProviders = data.customProviders && typeof data.customProviders === 'object' ? data.customProviders : {};
+    const allProviderNames = Array.from(new Set([
+      ...Object.keys(PROVIDERS),
+      ...Object.keys(oldCustomProviders),
+      ...Object.keys(newCustomProviders)
+    ]));
+
+    // Restore keys (if present)
+    if ('keys' in data && data.keys && typeof data.keys === 'object') {
+      for (const name of allProviderNames) {
+        await kv.del(`${PREFIX.keys}${name}`);
+      }
+      for (const [provider, keys] of Object.entries(data.keys)) {
+        if (Array.isArray(keys) && keys.length > 0) {
+          await setManagedKeys(provider, keys);
+        }
+      }
+    }
+
+    // Restore fallbacks (if present)
+    if ('fallbacks' in data && data.fallbacks && typeof data.fallbacks === 'object') {
+      for (const name of allProviderNames) {
+        await kv.del(`${PREFIX.fallbacks}${name}`);
+      }
+      for (const [provider, fallbacks] of Object.entries(data.fallbacks)) {
+        if (Array.isArray(fallbacks) && fallbacks.length > 0) {
+          await setFallbackChain(provider, fallbacks);
+        }
+      }
+    }
+  }
+
+  // Clear all caches at the end
+  clearCache();
+}
+
+/**
+ * Exports stats-related data (usage counts, daily reports, error logs) from Vercel KV for a given date range.
+ */
+export async function exportStatsData(startDate: string, endDate: string): Promise<Record<string, any>> {
+  const kv = await getKV();
+  if (!kv) {
+    throw new Error('KV storage not configured');
+  }
+
+  // Parse dates
+  const { enumerateDateKeys } = await import('../usage/daily-report-store');
+  const dates = enumerateDateKeys(startDate, endDate);
+  if (dates.length === 0) {
+    throw new Error('Invalid date range');
+  }
+
+  const { getAllProviders } = await import('../providers/resolver');
+  const allProviders = await getAllProviders();
+  const providerNames = Object.keys(allProviders);
+
+  // Extract months represented in the date range
+  const months = Array.from(new Set(dates.map(d => d.slice(0, 7))));
+
+  // Fetch data in one big pipeline request to save connection overhead & free tier quota
+  const pipeline = kv.pipeline();
+  
+  dates.forEach((d) => {
+    pipeline.hgetall(`usage:daily:${d}`);
+    pipeline.get(`quota:daily:${d}`);
+    pipeline.smembers(`error:keys:${d}`);
+    pipeline.get(`relay:report:daily:${d}`);
+    
+    providerNames.forEach((provider) => {
+      pipeline.hgetall(`usage:provider:${provider}:daily:${d}`);
+      pipeline.hgetall(`error:${provider}:${d}`);
+    });
+  });
+
+  months.forEach((m) => {
+    pipeline.get(`quota:monthly:${m}`);
+  });
+
+  const results = await pipeline.exec();
+
+  // Parse results back to expected structured objects
+  const usageDaily: Record<string, any> = {};
+  const quotaDaily: Record<string, any> = {};
+  const errorKeys: Record<string, string[]> = {};
+  const dailyReports: Record<string, any> = {};
+  const usageProviderDaily: Record<string, Record<string, any>> = {};
+  const errorProviderDaily: Record<string, Record<string, any>> = {};
+
+  // Init provider sub-records
+  for (const provider of providerNames) {
+    usageProviderDaily[provider] = {};
+    errorProviderDaily[provider] = {};
+  }
+
+  let idx = 0;
+  dates.forEach((d) => {
+    const uDaily = results[idx++];
+    const qDaily = results[idx++];
+    const errKeys = results[idx++];
+    const report = results[idx++];
+
+    if (uDaily && typeof uDaily === 'object' && Object.keys(uDaily).length > 0) {
+      usageDaily[d] = uDaily;
+    }
+    if (qDaily !== null && qDaily !== undefined) {
+      quotaDaily[d] = qDaily;
+    }
+    if (Array.isArray(errKeys) && errKeys.length > 0) {
+      errorKeys[d] = errKeys as string[];
+    }
+    if (report) {
+      dailyReports[d] = typeof report === 'string' ? JSON.parse(report) : report;
+    }
+
+    providerNames.forEach((provider) => {
+      const upDaily = results[idx++];
+      const epDaily = results[idx++];
+
+      if (upDaily && typeof upDaily === 'object' && Object.keys(upDaily).length > 0) {
+        usageProviderDaily[provider][d] = upDaily;
+      }
+      if (epDaily && typeof epDaily === 'object' && Object.keys(epDaily).length > 0) {
+        errorProviderDaily[provider][d] = epDaily;
+      }
+    });
+  });
+
+  const quotaMonthly: Record<string, any> = {};
+  months.forEach((m) => {
+    const qMonthly = results[idx++];
+    if (qMonthly !== null && qMonthly !== undefined) {
+      quotaMonthly[m] = qMonthly;
+    }
+  });
+
+  return {
+    type: 'ai-relay-stats-backup',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    startDate,
+    endDate,
+    data: {
+      usageDaily,
+      usageProviderDaily,
+      errorProviderDaily,
+      dailyReports,
+      quotaDaily,
+      quotaMonthly,
+      errorKeys
+    }
+  };
+}
+
+/**
+ * Restores stats-related data (usage counts, daily reports, error logs) into Vercel KV from a backup payload.
+ */
+export async function importStatsData(payload: Record<string, any>): Promise<void> {
+  const kv = await getKV();
+  if (!kv) {
+    throw new Error('KV storage not configured');
+  }
+
+  if (payload.type !== 'ai-relay-stats-backup' || payload.version !== 1 || !payload.data) {
+    throw new Error('Invalid statistics backup format or version');
+  }
+
+  const {
+    usageDaily = {},
+    usageProviderDaily = {},
+    errorProviderDaily = {},
+    dailyReports = {},
+    quotaDaily = {},
+    quotaMonthly = {},
+    errorKeys = {}
+  } = payload.data;
+
+  // Restore everything in a single pipeline
+  const pipeline = kv.pipeline();
+
+  // Restore usage daily
+  for (const [date, val] of Object.entries(usageDaily)) {
+    if (val && typeof val === 'object' && Object.keys(val).length > 0) {
+      pipeline.hset(`usage:daily:${date}`, val);
+      pipeline.expire(`usage:daily:${date}`, 30 * 24 * 60 * 60); // 30 days standard TTL
+    }
+  }
+
+  // Restore quota daily
+  for (const [date, val] of Object.entries(quotaDaily)) {
+    pipeline.set(`quota:daily:${date}`, String(val));
+    pipeline.expire(`quota:daily:${date}`, 2 * 24 * 60 * 60); // 2 days standard TTL
+  }
+
+  // Restore quota monthly
+  for (const [month, val] of Object.entries(quotaMonthly)) {
+    pipeline.set(`quota:monthly:${month}`, String(val));
+    pipeline.expire(`quota:monthly:${month}`, 35 * 24 * 60 * 60); // 35 days standard TTL
+  }
+
+  // Restore daily reports
+  for (const [date, val] of Object.entries(dailyReports)) {
+    if (val && typeof val === 'object') {
+      pipeline.set(`relay:report:daily:${date}`, JSON.stringify(val));
+      pipeline.expire(`relay:report:daily:${date}`, 30 * 24 * 60 * 60); // 30 days standard TTL
+    }
+  }
+
+  // Restore error keys
+  for (const [date, members] of Object.entries(errorKeys)) {
+    if (Array.isArray(members) && members.length > 0) {
+      pipeline.del(`error:keys:${date}`); // Clear first
+      pipeline.sadd(`error:keys:${date}`, ...members);
+      pipeline.expire(`error:keys:${date}`, 7 * 24 * 60 * 60); // 7 days standard TTL
+    }
+  }
+
+  // Restore provider daily usage
+  for (const [provider, datesData] of Object.entries(usageProviderDaily)) {
+    if (datesData && typeof datesData === 'object') {
+      for (const [date, val] of Object.entries(datesData as Record<string, any>)) {
+        if (val && typeof val === 'object' && Object.keys(val).length > 0) {
+          pipeline.hset(`usage:provider:${provider}:daily:${date}`, val);
+          pipeline.expire(`usage:provider:${provider}:daily:${date}`, 30 * 24 * 60 * 60);
+        }
+      }
+    }
+  }
+
+  // Restore provider error daily logs
+  for (const [provider, datesData] of Object.entries(errorProviderDaily)) {
+    if (datesData && typeof datesData === 'object') {
+      for (const [date, val] of Object.entries(datesData as Record<string, any>)) {
+        if (val && typeof val === 'object' && Object.keys(val).length > 0) {
+          pipeline.hset(`error:${provider}:${date}`, val);
+          pipeline.expire(`error:${provider}:${date}`, 7 * 24 * 60 * 60);
+        }
+      }
+    }
+  }
+
+  await pipeline.exec();
+}
+

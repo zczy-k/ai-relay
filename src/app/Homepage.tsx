@@ -84,6 +84,11 @@ const content = {
       { icon: '◇', title: '临时 API Key', description: 'HMAC 签名的无状态临时密钥，可设置过期时间和调用配额。', tier: 'p1' },
       { icon: '⧉', title: '虚拟模型映射', description: '把内部模型别名映射到真实 Provider 模型，调用侧无需理解上游差异。', tier: 'p1' },
       { icon: '!', title: '错误追踪与熔断', description: '按 Provider 和 Key 统计错误，自动隔离异常上游，提升整体可用性。', tier: 'p1' },
+      { icon: '▷', title: 'Provider 引导', description: 'Stepper 三步式创建：选模板 → 配密钥 → 测试保存，支持 8 个预置模板。', tier: 'p1' },
+      { icon: '⇄', title: '模型别名管理', description: 'CSV 批量导入导出、内联编辑、模型可见性隐藏，灵活管理模型映射。', tier: 'p1' },
+      { icon: '↕', title: '优先级规则', description: '拖拽排序的路由规则编辑器，支持条件组合和冲突检测。', tier: 'p1' },
+      { icon: '📊', title: '用量监控', description: '日期筛选、Provider 维度过滤、用量趋势图表，一目了然。', tier: 'p1' },
+      { icon: '🔍', title: '上游模型发现', description: '自动从上游 API 拉取可用模型列表，暂存确认后入库。', tier: 'p1' },
     ],
     quickstartSteps: [
       {
@@ -139,7 +144,7 @@ const content = {
       notes: ['OpenAI 兼容请求进入 Relay', '按模型前缀选择 Provider', 'Key Pool 轮换、退避、Fallback', '用量、错误与配置写入 KV'],
     },
     footer: {
-      version: 'AI Relay v2.0',
+      version: 'AI Relay v2.3',
       license: 'MIT License',
       powered: 'Powered by Vercel Edge + KV',
       docs: '文档',
@@ -199,6 +204,11 @@ const content = {
       { icon: '◇', title: 'Temporary API keys', description: 'Stateless HMAC-signed keys with expiration windows and quota limits.', tier: 'p1' },
       { icon: '⧉', title: 'Virtual model mapping', description: 'Map internal aliases to upstream model IDs so callers do not need provider-specific details.', tier: 'p1' },
       { icon: '!', title: 'Error tracking and circuit breaking', description: 'Track failures per Provider and key, then isolate unhealthy upstreams automatically.', tier: 'p1' },
+      { icon: '▷', title: 'Provider wizard', description: 'Stepper-based creation: select template → configure key → test & save, with 8 preset templates.', tier: 'p1' },
+      { icon: '⇄', title: 'Model aliases', description: 'CSV import/export, inline edit, and visibility toggle for flexible model mapping.', tier: 'p1' },
+      { icon: '↕', title: 'Priority rules', description: 'Drag-to-reorder routing rule editor with condition combination and conflict detection.', tier: 'p1' },
+      { icon: '📊', title: 'Usage monitor', description: 'Date range filtering, provider-level drill-down, and usage trend charts at a glance.', tier: 'p1' },
+      { icon: '🔍', title: 'Upstream discovery', description: 'Auto-fetch available models from upstream APIs, stage and confirm before saving to registry.', tier: 'p1' },
     ],
     quickstartSteps: [
       {
@@ -254,7 +264,7 @@ const content = {
       notes: ['OpenAI-compatible requests enter Relay', 'Model prefixes select the Provider', 'Key Pool rotates, backs off, and falls back', 'Usage, errors, and config persist to KV'],
     },
     footer: {
-      version: 'AI Relay v2.0',
+      version: 'AI Relay v2.3',
       license: 'MIT License',
       powered: 'Powered by Vercel Edge + KV',
       docs: 'Docs',

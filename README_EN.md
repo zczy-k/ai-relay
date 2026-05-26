@@ -16,7 +16,7 @@
 
 <p><strong><a href="https://vercel.com/new/clone?repository-url=https://github.com/MoyuFamily/ai-relay&env=RELAY_API_KEY,RELAY_ADMIN_KEY,RELAY_SIGNING_SECRET&envDescription=API%20authentication%20keys%20(required%20for%20security)&envLink=https://github.com/MoyuFamily/ai-relay#environment-variables">👉 Deploy Now</a></strong> · <a href="#-one-click-deploy-launch-your-ai-api-gateway-in-2-minutes">View setup steps</a></p>
 
-[![Version](https://img.shields.io/badge/Version-2.2.0-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-2.3.0-green.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org/)
 [![Edge Runtime](https://img.shields.io/badge/Edge_Runtime-⚡-black?logo=vercel)](https://vercel.com/docs/functions/edge-functions)
@@ -68,6 +68,11 @@
 | **Multi-Level Fallback** | Provider → Key chain failover |
 | **Circuit Breaker** | Automatic failover when provider is down |
 | **Admin Dashboard** | Key management, quota config, usage stats, model testing |
+| **Provider Wizard** | Stepper-based creation: select template → configure key → test & save |
+| **Model Aliases** | CSV import/export, inline edit, model visibility toggle |
+| **Priority Rules** | Drag-to-reorder routing rules with conflict detection |
+| **Usage Monitor** | Date range, provider filter, usage trend charts |
+| **Upstream Discovery** | Auto-fetch available models from upstream APIs |
 | **Streaming Responses** | SSE pass-through for real-time output |
 | **Webhook Notifications** | WeCom / Feishu / DingTalk / Slack — daily reports + alerts |
 | **Temp API Keys** | HMAC-SHA256 stateless signing, auto-expiring |
@@ -211,6 +216,7 @@ Generate time-limited keys from the Admin dashboard:
 | `CLAUDE_KEYS` | Anthropic API Keys | ⬜ |
 | `DEEPSEEK_KEYS` | DeepSeek API Keys | ⬜ |
 | `XIAOMI_KEYS` | Xiaomi API Keys | ⬜ |
+| `RELAY_KV_USAGE_SAMPLE_RATE` | Usage write sample rate; `1` is exact, `0.1` writes about 10% and scales values as estimates | ⬜ |
 
 > [!NOTE]
 > Provider keys are best configured via the Admin panel (stored in Upstash Redis), not as environment variables.
@@ -242,6 +248,10 @@ Access at `/admin` with your `RELAY_ADMIN_KEY`:
 | Feature | Description |
 |---------|-------------|
 | **Provider Keys** | Manage API keys with connectivity testing |
+| **Provider Wizard** | Stepper-based creation with 8 preset templates |
+| **Model Aliases** | CSV import/export, inline edit, visibility toggle |
+| **Priority Rules** | Drag-to-reorder routing editor with conflict detection |
+| **Usage Monitor** | Date range, provider filter, trend charts |
 | **Quota Config** | Dynamic per-provider quotas, KV-persisted |
 | **Model Testing** | Test connectivity and response for specific models |
 | **Temporary Keys** | Generate HMAC-SHA256 signed time-limited keys |

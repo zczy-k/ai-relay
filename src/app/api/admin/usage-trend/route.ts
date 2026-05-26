@@ -5,6 +5,7 @@
 import { NextRequest } from 'next/server';
 import { requireAdminAuth } from '@/lib/admin';
 import { KVUsageStorage } from '@/lib/usage';
+import { getUsageSamplingInfo } from '@/lib/usage/storage/kv-storage';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -55,6 +56,7 @@ export async function GET(request: NextRequest) {
   return Response.json({
     range,
     granularity,
+    sampling: getUsageSamplingInfo(),
     ...trend,
   }, {
     headers: {

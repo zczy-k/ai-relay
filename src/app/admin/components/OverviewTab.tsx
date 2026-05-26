@@ -31,6 +31,10 @@ interface AdminData {
     promptTokens: number;
     completionTokens: number;
     providers: Record<string, { requests: number; tokens: number; promptTokens: number; completionTokens: number }>;
+    sampling?: {
+      sampleRate: number;
+      estimated: boolean;
+    };
   };
   quota: {
     daily: { used: number; limit: number | string };
@@ -114,6 +118,8 @@ export default function OverviewTab({
     if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
     return n.toString();
   };
+  const usageEstimated = data.usage.sampling?.estimated === true;
+  const usageSamplePercent = Math.round((data.usage.sampling?.sampleRate ?? 1) * 100);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -142,6 +148,15 @@ export default function OverviewTab({
             </div>
           </div>
         </div>
+        {usageEstimated && (typeof data.quota.daily.limit !== 'number' || typeof data.quota.monthly.limit !== 'number') && (
+          <div style={{
+            marginTop: '0.9rem',
+            fontSize: '0.78rem',
+            color: '#fbbf24',
+          }}>
+            {t.quotaUsageEstimatedNotice}
+          </div>
+        )}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
           <div style={{
             padding: '0.4rem 0.8rem', borderRadius: '6px',
@@ -263,9 +278,38 @@ export default function OverviewTab({
 
       {/* Today's Usage */}
       <section className="glass-panel">
-        <h2 style={{ fontSize: '1.25rem', marginTop: 0, marginBottom: '1.25rem', color: '#fff', fontWeight: 600 }}>
-          {t.todaysUsage}
-        </h2>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+          <h2 style={{ fontSize: '1.25rem', margin: 0, color: '#fff', fontWeight: 600 }}>
+            {t.todaysUsage}
+          </h2>
+          {usageEstimated && (
+            <span title={t.usageEstimatedTooltip} style={{
+              padding: '0.25rem 0.55rem',
+              borderRadius: '6px',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              backgroundColor: 'rgba(245, 158, 11, 0.12)',
+              color: '#fbbf24',
+              border: '1px solid rgba(245, 158, 11, 0.2)',
+            }}>
+              {t.usageEstimatedBadge} · {usageSamplePercent}%
+            </span>
+          )}
+        </div>
+        {usageEstimated && (
+          <div style={{
+            marginBottom: '1rem',
+            padding: '0.55rem 0.75rem',
+            borderRadius: '6px',
+            fontSize: '0.8rem',
+            lineHeight: 1.4,
+            backgroundColor: 'rgba(245, 158, 11, 0.08)',
+            color: '#fbbf24',
+            border: '1px solid rgba(245, 158, 11, 0.15)',
+          }}>
+            {t.usageEstimatedNotice.replace('{rate}', `${usageSamplePercent}%`)}
+          </div>
+        )}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1.25rem', marginBottom: '1.5rem' }}>
           <div className="stat-card">
             <span style={{ color: '#9ca3af', fontSize: '0.85rem' }}>{t.requests}</span>

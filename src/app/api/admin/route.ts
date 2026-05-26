@@ -6,6 +6,7 @@ import { NextRequest } from 'next/server';
 import { getKeyPoolStats, initAllKeyPools } from '@/lib/relay';
 import { requireAdminAuth } from '@/lib/admin';
 import { KVUsageStorage } from '@/lib/usage';
+import { getUsageSamplingInfo } from '@/lib/usage/storage/kv-storage';
 import { getAllProviders } from '@/lib/providers';
 
 export const runtime = 'nodejs';
@@ -88,12 +89,16 @@ export async function GET(request: NextRequest) {
   const usageRequests = globalUsage?.requests || 0;
   const dailyQuotaUsed = quota.dailyLimit > 0 ? quota.dailyUsed : usageRequests;
   const monthlyQuotaUsed = quota.monthlyLimit > 0 ? quota.monthlyUsed : (monthlyUsage?.requests || usageRequests);
+  const usageSampling = getUsageSamplingInfo();
 
   return Response.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     providers: providersWithErrors,
-    usage: globalUsage || { requests: 0, tokens: 0, promptTokens: 0, completionTokens: 0, providers: {} },
+    usage: {
+      ...(globalUsage || { requests: 0, tokens: 0, promptTokens: 0, completionTokens: 0, providers: {} }),
+      sampling: usageSampling,
+    },
     quota: {
       daily: { used: dailyQuotaUsed, limit: quota.dailyLimit || 'unlimited' },
       monthly: { used: monthlyQuotaUsed, limit: quota.monthlyLimit || 'unlimited' },

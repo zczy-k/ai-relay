@@ -28,6 +28,10 @@ interface ProviderUsage {
 interface UsageTrendData {
   range: string;
   granularity: 'day' | 'week' | 'month';
+  sampling?: {
+    sampleRate: number;
+    estimated: boolean;
+  };
   global: UsagePoint[];
   providers: ProviderUsage[];
 }
@@ -104,6 +108,8 @@ export default function TokenTrendChart({ apiKey, lang = 'zh' }: TokenTrendChart
     loading: isEn ? 'Loading trend data...' : '正在加载趋势数据...',
     error: isEn ? 'Failed to load trend data' : '加载趋势数据失败',
     noData: isEn ? 'No usage data yet for this period' : '当前周期暂无消耗数据',
+    estimated: isEn ? 'Estimated' : '估算',
+    estimatedNotice: isEn ? 'Trend values are estimated from a sampled write rate.' : '趋势数据基于采样写入估算。',
   };
 
   const rangeOptions = {
@@ -216,6 +222,9 @@ export default function TokenTrendChart({ apiKey, lang = 'zh' }: TokenTrendChart
       ]
     : ['all'];
 
+  const trendEstimated = data?.sampling?.estimated === true;
+  const trendSamplePercent = Math.round((data?.sampling?.sampleRate ?? 1) * 100);
+
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
     return (
@@ -257,9 +266,24 @@ export default function TokenTrendChart({ apiKey, lang = 'zh' }: TokenTrendChart
         flexWrap: 'wrap',
         gap: '0.75rem',
       }}>
-        <h2 style={{ fontSize: '1.2rem', marginTop: 0, margin: 0 }}>
-          {t.title}
-        </h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+          <h2 style={{ fontSize: '1.2rem', marginTop: 0, margin: 0 }}>
+            {t.title}
+          </h2>
+          {trendEstimated && (
+            <span title={t.estimatedNotice} style={{
+              padding: '0.2rem 0.5rem',
+              borderRadius: '6px',
+              fontSize: '0.72rem',
+              fontWeight: 600,
+              backgroundColor: 'rgba(245, 158, 11, 0.12)',
+              color: '#fbbf24',
+              border: '1px solid rgba(245, 158, 11, 0.2)',
+            }}>
+              {t.estimated} · {trendSamplePercent}%
+            </span>
+          )}
+        </div>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
           {/* Provider filter */}
           <div style={{ display: 'flex', gap: '0.25rem' }}>

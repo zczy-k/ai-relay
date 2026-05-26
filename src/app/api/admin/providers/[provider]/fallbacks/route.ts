@@ -124,7 +124,14 @@ export async function PUT(request: NextRequest, { params }: { params: Params }) 
     }
   }
 
-  await setFallbackChain(provider, body.fallbacks as string[]);
+  try {
+    await setFallbackChain(provider, body.fallbacks as string[]);
+  } catch (err: any) {
+    return Response.json(
+      { error: { message: err.message || 'Failed to update fallback chain', code: 400 } },
+      { status: 400 }
+    );
+  }
 
   return Response.json({
     provider,

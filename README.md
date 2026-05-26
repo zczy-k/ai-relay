@@ -16,7 +16,7 @@
 
 <p><strong><a href="https://vercel.com/new/clone?repository-url=https://github.com/MoyuFamily/ai-relay&env=RELAY_API_KEY,RELAY_ADMIN_KEY,RELAY_SIGNING_SECRET&envDescription=API%20authentication%20keys%20(required%20for%20security)&envLink=https://github.com/MoyuFamily/ai-relay#environment-variables">👉 立即一键部署</a></strong> · <a href="#-一键部署2-分钟上线你的-ai-api-网关">查看部署步骤</a></p>
 
-[![Version](https://img.shields.io/badge/Version-2.2.0-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-2.3.0-green.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org/)
 [![Edge Runtime](https://img.shields.io/badge/Edge_Runtime-⚡-black?logo=vercel)](https://vercel.com/docs/functions/edge-functions)
@@ -68,6 +68,11 @@
 | **多级 Fallback** | Provider → Key 链式故障转移 |
 | **熔断器** | Provider 故障时自动切换 |
 | **Admin 后台** | 密钥管理、配额配置、用量统计、模型测试 |
+| **Provider 引导** | Stepper 三步式创建：选模板 → 配密钥 → 测试保存 |
+| **模型别名管理** | CSV 批量导入导出、内联编辑、模型可见性隐藏 |
+| **优先级规则** | 拖拽排序、条件组合、冲突检测 |
+| **用量监控** | 日期筛选、Provider 过滤、趋势图表 |
+| **上游模型发现** | 自动从上游 API 拉取可用模型列表 |
 | **流式响应** | SSE 透传，实时输出 |
 | **Webhook 通知** | 企微 / 飞书 / 钉钉 / Slack，日报 + 超限告警 |
 | **临时 API Key** | HMAC-SHA256 无状态签名，自动过期 |
@@ -211,6 +216,7 @@ for chunk in stream:
 | `CLAUDE_KEYS` | Anthropic API Keys | ⬜ |
 | `DEEPSEEK_KEYS` | DeepSeek API Keys | ⬜ |
 | `XIAOMI_KEYS` | Xiaomi API Keys | ⬜ |
+| `RELAY_KV_USAGE_SAMPLE_RATE` | 用量统计写入采样率，`1` 为精确统计，`0.1` 表示约 10% 写入并按比例估算 | ⬜ |
 
 > [!NOTE]
 > Provider 密钥建议通过 Admin 后台配置（存储在 Upstash Redis 中），而非写入环境变量。
@@ -242,6 +248,10 @@ Client → Edge Runtime (全球分发, <50ms 延迟)
 | 功能 | 说明 |
 |------|------|
 | **Provider Keys** | 管理所有 Provider 的 API 密钥，支持连通性测试 |
+| **Provider 引导** | Stepper 三步式创建 Provider，支持 8 个预置模板 |
+| **模型别名** | CSV 批量导入导出、内联编辑、模型可见性隐藏 |
+| **优先级规则** | 拖拽排序的路由规则编辑器，支持冲突检测 |
+| **用量监控** | 日期筛选、Provider 维度过滤、用量趋势图表 |
 | **配额配置** | 为每个 Provider 设置动态配额，KV 持久化 |
 | **模型测试** | 测试特定模型的连通性和响应 |
 | **临时密钥** | 生成有时效的 HMAC-SHA256 签名 API 密钥 |

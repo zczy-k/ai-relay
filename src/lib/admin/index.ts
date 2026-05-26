@@ -1,6 +1,7 @@
 export {
   getFallbackChain,
   setFallbackChain,
+  detectFallbackCycle,
   clearFallbackChain,
   getManagedKeys,
   getAllManagedKeys,
@@ -22,6 +23,10 @@ export {
   getPriorityRules,
   savePriorityRules,
   tryDecodeBase64,
+  exportBackupData,
+  importBackupData,
+  exportStatsData,
+  importStatsData,
 } from './admin-config';
 
 export { requireAdminAuth, getRelayApiKeys, getRelayAdminKeys } from './auth';

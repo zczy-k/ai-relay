@@ -100,6 +100,8 @@ export async function relayRequest(
     { provider: provider.displayName, error: primaryResult.lastError?.message || 'unknown error' },
   ];
 
+  const attemptedProviders = new Set<string>([provider.name]);
+
   for (const fbEntry of fallbackNames) {
     // Parse "provider:model" format — model is optional
     const colonIdx = fbEntry.indexOf(':');
@@ -113,6 +115,12 @@ export async function relayRequest(
       errors.push({ provider: fbName, error: 'Unknown provider' });
       continue;
     }
+
+    if (attemptedProviders.has(fbProvider.name)) {
+      console.warn(`[fallback] Provider ${fbProvider.displayName} already attempted in this request, skipping to avoid loop`);
+      continue;
+    }
+    attemptedProviders.add(fbProvider.name);
 
     console.log(`Trying fallback: ${fbProvider.displayName}${explicitModel ? ` (model: ${explicitModel})` : ''} (after ${provider.displayName} failed)`);
     const fbKey = await selectKey(fbProvider);

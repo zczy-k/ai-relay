@@ -236,27 +236,33 @@ function getSampleRate(envName: string, fallback: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
+export function getUsageSamplingInfo(): { sampleRate: number; estimated: boolean } {
+  const sampleRate = getSampleRate('RELAY_KV_USAGE_SAMPLE_RATE', 1);
+  return { sampleRate, estimated: sampleRate < 1 };
+}
+
 function shouldSample(rate: number): boolean {
   return rate >= 1 || (rate > 0 && Math.random() < rate);
 }
 
 const RECORD_USAGE_SCRIPT = `
-local tokens = tonumber(ARGV[1]) or 0
-local promptTokens = tonumber(ARGV[2]) or 0
-local completionTokens = tonumber(ARGV[3]) or 0
-local writeProvider = ARGV[4] == "1"
-local writeKeyUsage = ARGV[5] == "1"
-local keyRequests = tonumber(ARGV[6]) or 0
-local keyTokens = tonumber(ARGV[7]) or 0
+local requests = tonumber(ARGV[1]) or 1
+local tokens = tonumber(ARGV[2]) or 0
+local promptTokens = tonumber(ARGV[3]) or 0
+local completionTokens = tonumber(ARGV[4]) or 0
+local writeProvider = ARGV[5] == "1"
+local writeKeyUsage = ARGV[6] == "1"
+local keyRequests = tonumber(ARGV[7]) or 0
+local keyTokens = tonumber(ARGV[8]) or 0
 
-redis.call("HINCRBY", KEYS[1], "requests", 1)
+redis.call("HINCRBY", KEYS[1], "requests", requests)
 redis.call("HINCRBY", KEYS[1], "tokens", tokens)
 redis.call("HINCRBY", KEYS[1], "promptTokens", promptTokens)
 redis.call("HINCRBY", KEYS[1], "completionTokens", completionTokens)
 redis.call("EXPIRE", KEYS[1], 2592000)
 
 if writeProvider then
-  redis.call("HINCRBY", KEYS[2], "requests", 1)
+  redis.call("HINCRBY", KEYS[2], "requests", requests)
   redis.call("HINCRBY", KEYS[2], "tokens", tokens)
   redis.call("HINCRBY", KEYS[2], "promptTokens", promptTokens)
   redis.call("HINCRBY", KEYS[2], "completionTokens", completionTokens)
@@ -320,15 +326,16 @@ return {1, dailyUsed, monthlyUsed}
 `;
 
 async function recordUsageFallback(kv: any, keys: string[], args: string[]): Promise<void> {
-  const tokens = Number(args[0] || 0);
-  const promptTokens = Number(args[1] || 0);
-  const completionTokens = Number(args[2] || 0);
-  const writeProvider = args[3] === '1';
-  const writeKeyUsage = args[4] === '1';
-  const keyRequests = Number(args[5] || 0);
-  const keyTokens = Number(args[6] || 0);
+  const requests = Number(args[0] || 1);
+  const tokens = Number(args[1] || 0);
+  const promptTokens = Number(args[2] || 0);
+  const completionTokens = Number(args[3] || 0);
+  const writeProvider = args[4] === '1';
+  const writeKeyUsage = args[5] === '1';
+  const keyRequests = Number(args[6] || 0);
+  const keyTokens = Number(args[7] || 0);
   const promises: Promise<unknown>[] = [
-    kv.hincrby(keys[0], 'requests', 1),
+    kv.hincrby(keys[0], 'requests', requests),
     kv.hincrby(keys[0], 'tokens', tokens),
     kv.hincrby(keys[0], 'promptTokens', promptTokens),
     kv.hincrby(keys[0], 'completionTokens', completionTokens),
@@ -336,7 +343,7 @@ async function recordUsageFallback(kv: any, keys: string[], args: string[]): Pro
   ];
   if (writeProvider) {
     promises.push(
-      kv.hincrby(keys[1], 'requests', 1),
+      kv.hincrby(keys[1], 'requests', requests),
       kv.hincrby(keys[1], 'tokens', tokens),
       kv.hincrby(keys[1], 'promptTokens', promptTokens),
       kv.hincrby(keys[1], 'completionTokens', completionTokens),
@@ -484,22 +491,31 @@ export class KVUsageStorage implements UsageStorage {
       const kv = await getKV();
       if (!kv) return;
 
+      const usageSampleRate = getUsageSamplingInfo().sampleRate;
+      if (!shouldSample(usageSampleRate)) return;
+      const usageScale = usageSampleRate > 0 && usageSampleRate < 1
+        ? Math.max(1, Math.round(1 / usageSampleRate))
+        : 1;
+
       const date = today();
-      const totalTokens = event.totalTokens;
+      const requestCount = usageScale;
+      const totalTokens = event.totalTokens * usageScale;
+      const promptTokens = event.promptTokens * usageScale;
+      const completionTokens = event.completionTokens * usageScale;
       let writeKeyUsage = false;
       let keyRequests = 0;
       let keyTokens = 0;
       const mode = getMode();
       if (mode === 'full') {
         writeKeyUsage = true;
-        keyRequests = 1;
+        keyRequests = requestCount;
         keyTokens = totalTokens;
       } else if (mode === 'sampled') {
         const rate = getSampleRate('RELAY_KV_KEY_USAGE_SAMPLE_RATE', 0.1);
         if (shouldSample(rate)) {
           const scale = Math.max(1, Math.round(1 / rate));
           writeKeyUsage = true;
-          keyRequests = scale;
+          keyRequests = requestCount * scale;
           keyTokens = totalTokens * scale;
         }
       }
@@ -514,9 +530,10 @@ export class KVUsageStorage implements UsageStorage {
             kvKeys.legacyKeyTotal(event.apiKeyHash),
           ],
           [
+            String(requestCount),
             String(totalTokens),
-            String(event.promptTokens),
-            String(event.completionTokens),
+            String(promptTokens),
+            String(completionTokens),
             event.provider ? '1' : '0',
             writeKeyUsage ? '1' : '0',
             String(keyRequests),

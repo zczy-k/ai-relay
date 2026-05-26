@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { __adminConfigCacheForTests, createMemoryMockKV, getManagedKeys, getManagedKeysVersion, setManagedKeys } from '../lib/admin/admin-config';
-import { __usageStorageCacheForTests, KVUsageStorage } from '../lib/usage/storage/kv-storage';
+import { __usageStorageCacheForTests, getUsageSamplingInfo, KVUsageStorage } from '../lib/usage/storage/kv-storage';
 import { createUsageEvent } from '../lib/usage';
 import { kvKeys } from '../lib/usage/storage/kv-keys';
 import { getKeyPool } from '../lib/relay/key-pool';
@@ -70,6 +70,41 @@ describe('KV command optimization', () => {
       daily: { requests: 3, tokens: 99 },
       total: { requests: 10, tokens: 500 },
     });
+  });
+
+  it('samples aggregate usage writes and scales stored counters', async () => {
+    const kv = installMockKV();
+    vi.stubEnv('RELAY_KV_USAGE_SAMPLE_RATE', '0.25');
+    vi.spyOn(Math, 'random').mockReturnValue(0.1);
+    const storage = new KVUsageStorage();
+    const date = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    expect(getUsageSamplingInfo()).toEqual({ sampleRate: 0.25, estimated: true });
+
+    await storage.record(usageEvent());
+
+    expect(await kv.hgetall(kvKeys.usageDaily(date))).toMatchObject({
+      requests: 4,
+      tokens: 100,
+      promptTokens: 40,
+      completionTokens: 60,
+    });
+    expect(await kv.hgetall(kvKeys.usageProviderDaily('openai', date))).toMatchObject({
+      requests: 4,
+      tokens: 100,
+    });
+  });
+
+  it('skips aggregate usage writes when sampling misses', async () => {
+    const kv = installMockKV();
+    vi.stubEnv('RELAY_KV_USAGE_SAMPLE_RATE', '0.25');
+    vi.spyOn(Math, 'random').mockReturnValue(0.9);
+    const storage = new KVUsageStorage();
+    const date = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    await storage.record(usageEvent());
+
+    expect(await kv.hgetall(kvKeys.usageDaily(date))).toBeNull();
   });
 
   it('clears cached per-key usage after usage writes', async () => {
