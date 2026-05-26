@@ -2,7 +2,7 @@ name: Sync Upstream
 
 on:
   schedule:
-    - cron: '*/30 * * * *'     # 每30分钟检查一次
+    - cron: '*/30 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -19,8 +19,11 @@ jobs:
       - name: Sync from MoyuFamily/ai-relay
         uses: aormsby/Fork-Sync-With-Upstream-action@v3.4
         with:
-          upstream_repository: MoyuFamily/ai-relay
-          upstream_branch: main
-          target_branch: main
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          git_merge_args: '--strategy-option=ours'
+          upstream_sync_repo: MoyuFamily/ai-relay
+          upstream_sync_branch: main
+
+          target_sync_branch: main
+
+          target_repo_token: ${{ secrets.GITHUB_TOKEN }}
+
+          upstream_pull_args: '--strategy-option=ours'
