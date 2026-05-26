@@ -54,6 +54,7 @@ export default function AdminPage() {
     handleSaveQuota,
     handleResetQuota,
     handleTestCustomProvider,
+    handleFetchProviderModels,
     handleSaveCustomProvider,
     handleDeleteCustomProvider,
   } = useAdminHandlers(apiKey, t);
@@ -577,6 +578,7 @@ export default function AdminPage() {
             setEditingCustomProvider={setEditingCustomProvider}
             onSaveCustomProvider={handleSaveCustomProvider}
             onTestCustomProvider={handleTestCustomProvider}
+            onFetchProviderModels={handleFetchProviderModels}
             onDeleteCustomProvider={handleDeleteCustomProvider}
           />
         )}

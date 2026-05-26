@@ -22,6 +22,7 @@ interface CustomProviderModalProps {
   setEditingCustomProvider: (val: any) => void;
   onSaveCustomProvider: (provider: any) => Promise<void>;
   onTestCustomProvider?: (provider: any, apiKeyValue: string, modelId?: string) => Promise<any>;
+  onFetchProviderModels?: (provider: any, apiKeyValue: string) => Promise<{ models: any[] }>;
 }
 
 export default function CustomProviderModal({
@@ -34,6 +35,7 @@ export default function CustomProviderModal({
   setEditingCustomProvider,
   onSaveCustomProvider,
   onTestCustomProvider,
+  onFetchProviderModels,
 }: CustomProviderModalProps) {
   // Local states for custom provider form
   const [formId, setFormId] = useState('');
@@ -49,6 +51,10 @@ export default function CustomProviderModal({
     status: 'idle',
     message: '',
   });
+  const [modelFetchState, setModelFetchState] = useState<{ status: 'idle' | 'loading' | 'success' | 'error'; message: string }>({
+    status: 'idle',
+    message: '',
+  });
 
   const applyTemplateToForm = (template: ProviderTemplate) => {
     setSelectedTemplateId(template.id);
@@ -60,6 +66,7 @@ export default function CustomProviderModal({
     setFormModelPrefixes(form.modelPrefixes.join(', '));
     setTestModelId(form.modelPrefixes[0] ? `${form.modelPrefixes[0]}demo` : '');
     setTestState({ status: 'idle', message: '' });
+    setModelFetchState({ status: 'idle', message: '' });
   };
 
   // Sync edit mode fields
@@ -68,6 +75,7 @@ export default function CustomProviderModal({
       setSelectedTemplateId('custom');
       setApiKeyValue('');
       setTestState({ status: 'idle', message: '' });
+      setModelFetchState({ status: 'idle', message: '' });
       setFormId(editingCustomProvider.id || editingCustomProvider.name || '');
       setFormDisplayName(editingCustomProvider.displayName || editingCustomProvider.name || '');
       setFormBaseUrl(editingCustomProvider.baseUrl || '');
@@ -87,6 +95,7 @@ export default function CustomProviderModal({
       setApiKeyValue('');
       setTestModelId(form.modelPrefixes[0] ? `${form.modelPrefixes[0]}demo` : '');
       setTestState({ status: 'idle', message: '' });
+      setModelFetchState({ status: 'idle', message: '' });
     }
   }, [editingCustomProvider, customProviderModalOpen]);
 
@@ -153,6 +162,53 @@ export default function CustomProviderModal({
     apiKey: 'API Key',
     connectivityTest: lang === 'zh' ? '连通性测试' : 'Connectivity test',
     customTemplate: lang === 'zh' ? '自定义 / Custom' : 'Custom',
+    fetchModels: t.fetchModels || (lang === 'zh' ? '从供应商拉取' : 'Fetch from provider'),
+    fetchingModels: t.fetchingModels || (lang === 'zh' ? '拉取中...' : 'Fetching...'),
+  };
+
+  const mergeFetchedModels = (fetchedModels: any[]) => {
+    const existing = new Map(formModels.map((model) => [model.id, model]));
+    for (const model of fetchedModels) {
+      if (!model?.id) continue;
+      existing.set(model.id, {
+        id: model.id,
+        displayName: model.displayName || model.id,
+        contextWindow: model.contextWindow || 128000,
+        maxOutput: model.maxOutput || 4096,
+        supportsStream: model.supportsStream ?? true,
+        supportsVision: model.supportsVision ?? false,
+        supportsTools: model.supportsTools ?? false,
+        pricing: model.pricing || { input: 0, output: 0 },
+      });
+    }
+    setFormModels(Array.from(existing.values()).sort((a, b) => String(a.id).localeCompare(String(b.id))));
+  };
+
+  const handleFetchProviderModels = async () => {
+    if (!onFetchProviderModels) return;
+    if (providerValidation) {
+      setModelFetchState({ status: 'error', message: providerValidation });
+      return;
+    }
+    if (apiKeyValidation) {
+      setModelFetchState({ status: 'error', message: apiKeyValidation });
+      return;
+    }
+    setModelFetchState({ status: 'loading', message: helperText.fetchingModels });
+    try {
+      const result = await onFetchProviderModels(draftProvider, apiKeyValue.trim());
+      const models = Array.isArray(result?.models) ? result.models : [];
+      mergeFetchedModels(models);
+      setModelFetchState({
+        status: 'success',
+        message: lang === 'zh' ? `已拉取 ${models.length} 个模型` : `Fetched ${models.length} models`,
+      });
+    } catch (error: any) {
+      setModelFetchState({
+        status: 'error',
+        message: error?.message || (lang === 'zh' ? '拉取模型失败' : 'Failed to fetch models'),
+      });
+    }
   };
 
   const handleRunConnectivityTest = async () => {
@@ -499,6 +555,24 @@ export default function CustomProviderModal({
 
                 <button
                   type="button"
+                  onClick={handleFetchProviderModels}
+                  disabled={modelFetchState.status === 'loading' || !onFetchProviderModels}
+                  style={{
+                    padding: '0.3rem 0.6rem',
+                    borderRadius: '4px',
+                    border: '1px solid rgba(16, 185, 129, 0.4)',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    color: '#34d399',
+                    cursor: modelFetchState.status === 'loading' ? 'not-allowed' : 'pointer',
+                    fontSize: '0.8rem',
+                    opacity: modelFetchState.status === 'loading' ? 0.6 : 1,
+                  }}
+                >
+                  {modelFetchState.status === 'loading' ? helperText.fetchingModels : helperText.fetchModels}
+                </button>
+
+                <button
+                  type="button"
                   onClick={handleFormAddModel}
                   style={{
                     padding: '0.3rem 0.6rem',
@@ -516,6 +590,18 @@ export default function CustomProviderModal({
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '250px', overflowY: 'auto', paddingRight: '0.25rem' }}>
+              {modelFetchState.message && (
+                <div style={{
+                  fontSize: '0.78rem',
+                  color: modelFetchState.status === 'error' ? '#fca5a5' : '#86efac',
+                  backgroundColor: modelFetchState.status === 'error' ? 'rgba(239, 68, 68, 0.08)' : 'rgba(16, 185, 129, 0.08)',
+                  border: `1px solid ${modelFetchState.status === 'error' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(16, 185, 129, 0.25)'}`,
+                  borderRadius: '6px',
+                  padding: '0.45rem 0.6rem',
+                }}>
+                  {modelFetchState.message}
+                </div>
+              )}
               {formModels.map((model, index) => (
                 <div key={index} style={{
                   padding: '0.75rem',

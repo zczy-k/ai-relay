@@ -89,6 +89,8 @@ describe('iteration one provider CRUD UI helpers', () => {
           modelPrefixes: '模型前缀',
           modelsList: '模型列表',
           reuseExistingModel: '复用现有模型',
+          fetchModels: '从供应商拉取',
+          fetchingModels: '拉取中...',
           addModel: '添加模型',
           modelId: '模型 ID',
           modelDisplayName: '模型显示名',
@@ -122,6 +124,7 @@ describe('iteration one provider CRUD UI helpers', () => {
     expect(html).toContain('百度文心');
     expect(html).toContain('API Key');
     expect(html).toContain('连通性测试');
+    expect(html).toContain('从供应商拉取');
     expect(html).toContain('overscroll-behavior:contain');
     expect(html).toContain('touch-action:pan-y');
   });

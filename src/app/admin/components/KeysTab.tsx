@@ -43,6 +43,7 @@ interface KeysTabProps {
   setEditingCustomProvider: (val: any) => void;
   onSaveCustomProvider: (provider: any) => Promise<void>;
   onTestCustomProvider: (provider: any, apiKeyValue: string, modelId?: string) => Promise<any>;
+  onFetchProviderModels: (provider: any, apiKeyValue: string) => Promise<{ models: any[] }>;
   onDeleteCustomProvider: (name: string) => Promise<void>;
 }
 
@@ -78,6 +79,7 @@ export default function KeysTab(props: KeysTabProps) {
     setEditingCustomProvider,
     onSaveCustomProvider,
     onTestCustomProvider,
+    onFetchProviderModels,
     onDeleteCustomProvider,
   } = props;
 
@@ -181,6 +183,7 @@ export default function KeysTab(props: KeysTabProps) {
         setEditingCustomProvider={setEditingCustomProvider}
         onSaveCustomProvider={onSaveCustomProvider}
         onTestCustomProvider={onTestCustomProvider}
+        onFetchProviderModels={onFetchProviderModels}
       />
     </div>
   );

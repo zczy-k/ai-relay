@@ -372,6 +372,22 @@ export function useAdminHandlers(apiKey: string, t: any) {
     return resData;
   }, [apiKey, t]);
 
+  const handleFetchProviderModels = useCallback(async (provider: any, apiKeyValue: string) => {
+    const res = await fetch('/api/admin/providers/models', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({ key: apiKeyValue, providerConfig: provider }),
+    });
+    const resData = await res.json();
+    if (!res.ok) {
+      throw new Error(resData.error?.message || 'Failed to fetch provider models');
+    }
+    return resData;
+  }, [apiKey]);
+
   const handleSaveCustomProvider = useCallback(async (provider: any) => {
     setOperationLoading(true);
     try {
@@ -471,6 +487,7 @@ export function useAdminHandlers(apiKey: string, t: any) {
     handleSaveQuota,
     handleResetQuota,
     handleTestCustomProvider,
+    handleFetchProviderModels,
     handleSaveCustomProvider,
     handleDeleteCustomProvider,
   };
