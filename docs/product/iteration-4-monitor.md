@@ -222,8 +222,8 @@ Unknown ───→ Healthy ───→ Healthy ───→ Healthy
     "deepseek": { "requests": 434, "tokens": 1678900 }
   },
   "topModels": [
-    { "model": "gpt-4o", "requests": 500, "tokens": 2500000 },
-    { "model": "deepseek-chat", "requests": 300, "tokens": 1200000 }
+    { "model": "gpt-5.4", "requests": 500, "tokens": 2500000 },
+    { "model": "deepseek-fast", "requests": 300, "tokens": 1200000 }
   ]
 }
 ```

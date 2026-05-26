@@ -12,14 +12,15 @@ import { findMatchingPriorityRule } from '../admin/priority-rules-core';
  * transparently rewritten to the actual upstream model ID.
  */
 const MODEL_ALIASES: Record<string, string> = {
-  'gpt-4': 'gpt-4-turbo',
-  'gpt-3.5': 'gpt-3.5-turbo',
-  'claude-3': 'claude-3-5-sonnet-20241022',
-  'claude-3-opus': 'claude-3-opus-20240229',
-  'claude-3-sonnet': 'claude-3-5-sonnet-20241022',
-  'claude-3-haiku': 'claude-3-5-haiku-20241022',
-  'deepseek-chat': 'deepseek-v4-flash',
-  'deepseek-reasoner': 'deepseek-v4-pro',
+  'gpt-best': 'gpt-5.5',
+  'gpt-latest': 'gpt-5.4',
+  'gpt-fast': 'gpt-5.4-mini',
+  'gpt-cheap': 'gpt-5.4-nano',
+  'claude-best': 'claude-opus-4-7',
+  'claude-sonnet': 'claude-sonnet-4-6',
+  'claude-fast': 'claude-haiku-4-5-20251001',
+  'deepseek-fast': 'deepseek-v4-flash',
+  'deepseek-pro': 'deepseek-v4-pro',
 };
 
 /**
@@ -168,8 +169,7 @@ export async function resolveFallbackModel(originalModel: string, targetProvider
     case 'deepseek':
       // Map reasoning models to DeepSeek V4 Pro, others to DeepSeek V4 Flash
       if (
-        lowerModel.startsWith('o1') ||
-        lowerModel.startsWith('o3') ||
+        lowerModel.includes('gpt-5.5') ||
         lowerModel.includes('reasoner') ||
         lowerModel.includes('r1')
       ) {
@@ -212,35 +212,36 @@ export async function resolveFallbackModel(originalModel: string, targetProvider
 
     case 'openai':
       if (
-        lowerModel.startsWith('o1') ||
-        lowerModel.startsWith('o3') ||
+        lowerModel.includes('gpt-5.5') ||
         lowerModel.includes('reasoner')
       ) {
-        return 'o3-mini';
+        return 'gpt-5.5';
+      }
+      if (lowerModel.includes('nano')) {
+        return 'gpt-5.4-nano';
       }
       if (
         lowerModel.includes('mini') ||
         lowerModel.includes('haiku') ||
-        lowerModel.includes('flash') ||
-        lowerModel.includes('3.5-turbo')
+        lowerModel.includes('flash')
       ) {
-        return 'gpt-4o-mini';
+        return 'gpt-5.4-mini';
       }
-      return 'gpt-4o';
+      return 'gpt-5.4';
 
     case 'anthropic':
       if (
         lowerModel.includes('mini') ||
         lowerModel.includes('haiku') ||
         lowerModel.includes('flash') ||
-        lowerModel.includes('3.5-turbo')
+        lowerModel.includes('nano')
       ) {
-        return 'claude-3-5-haiku-20241022';
+        return 'claude-haiku-4-5-20251001';
       }
-      return 'claude-3-5-sonnet-20241022';
+      return 'claude-sonnet-4-6';
 
     case 'lpgpt':
-      return 'gpt-5.3';
+      return 'gpt-5.4';
 
     default:
       // Fallback: use the first model ID in the provider's model list if available

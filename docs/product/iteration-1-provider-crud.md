@@ -122,7 +122,7 @@
 
 | 模板 ID | 显示名 | baseUrl | headerFormat | modelPrefixes | envKeyField | 备注 |
 |---------|--------|---------|-------------|---------------|-------------|------|
-| `openai` | OpenAI | `https://api.openai.com/v1` | `openai` | `gpt-`, `o1-`, `o3-`, `dall-e-`, `whisper-`, `tts-`, `text-embedding-` | `OPENAI_KEYS` | 默认首选 |
+| `openai` | OpenAI | `https://api.openai.com/v1` | `openai` | `gpt-`, `gpt-5.5-`, `gpt-5.4-`, `dall-e-`, `whisper-`, `tts-`, `text-embedding-` | `OPENAI_KEYS` | 默认首选 |
 | `anthropic` | Anthropic | `https://api.anthropic.com` | `anthropic` | `claude-` | `ANTHROPIC_KEYS` | x-api-key 认证 |
 | `google` | Google Gemini | `https://generativelanguage.googleapis.com/v1beta` | `openai` | `gemini-` | `GOOGLE_KEYS` | OpenAI 兼容中继 |
 | `azure` | Azure OpenAI | *(用户填写)* | `azure` | *(用户填写)* | `AZURE_OPENAI_KEYS` | 需自定义 baseUrl |
@@ -280,7 +280,7 @@ interface StepperState {
 | 供应商类型 | 测试方式 | 请求内容 | 预期响应 |
 |-----------|---------|---------|---------|
 | OpenAI 兼容 | `GET /v1/models` | 无需 body | 200 + model list |
-| Anthropic | `POST /v1/messages` | `{"model":"claude-3-haiku-20240307","max_tokens":1,"messages":[{"role":"user","content":"hi"}]}` | 200 + completion |
+| Anthropic | `POST /v1/messages` | `{"model":"claude-haiku-4-5-20251001","max_tokens":1,"messages":[{"role":"user","content":"hi"}]}` | 200 + completion |
 | Azure | `GET /openai/deployments?api-version=2024-02-01` | 无需 body | 200 + deployment list |
 | 自定义 | 尝试 `GET {baseUrl}/models` | 无需 body | 200 或 401（Key 有效但权限不足也算通过） |
 

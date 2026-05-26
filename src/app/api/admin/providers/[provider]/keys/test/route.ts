@@ -87,7 +87,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   const isAnthropic = provider.headerFormat === 'anthropic';
   const targetModel = (body.model && typeof body.model === 'string' && body.model.trim().length > 0)
     ? body.model.trim()
-    : await resolveFallbackModel('gpt-3.5-turbo', providerName);
+    : await resolveFallbackModel('gpt-5.4-mini', providerName);
   const upstreamModel = resolveUpstreamModel(targetModel, provider);
 
   const testBody: ChatCompletionRequest = {

@@ -12,7 +12,7 @@ describe('iteration three priority rules UI helpers', () => {
   it('reorders rules with bounded drag/arrow movement', () => {
     const rules = [
       { id: 'a', name: 'A', enabled: true, modelPattern: 'gpt-*', providerOrder: ['openai'] },
-      { id: 'b', name: 'B', enabled: true, modelPattern: 'o1-*', providerOrder: ['openai'] },
+      { id: 'b', name: 'B', enabled: true, modelPattern: 'gpt-5.5-*', providerOrder: ['openai'] },
       { id: 'c', name: 'C', enabled: true, modelPattern: 'claude-*', providerOrder: ['anthropic'] },
     ];
 
@@ -31,8 +31,8 @@ describe('iteration three priority rules UI helpers', () => {
 
   it('derives the strongest realtime conflict state for a rule card', () => {
     const conflicts: PriorityRuleConflict[] = [
-      { type: 'overlap', severity: 'warning', ruleIds: ['a', 'b'], ruleNames: ['A', 'B'], sampleModel: 'gpt-4o', matchedModels: ['gpt-4o'], message: 'warning' },
-      { type: 'duplicate', severity: 'error', ruleIds: ['c', 'a'], ruleNames: ['C', 'A'], sampleModel: 'o1-mini', matchedModels: ['o1-mini'], message: 'error' },
+      { type: 'overlap', severity: 'warning', ruleIds: ['a', 'b'], ruleNames: ['A', 'B'], sampleModel: 'gpt-5.4', matchedModels: ['gpt-5.4'], message: 'warning' },
+      { type: 'duplicate', severity: 'error', ruleIds: ['c', 'a'], ruleNames: ['C', 'A'], sampleModel: 'gpt-5.5', matchedModels: ['gpt-5.5'], message: 'error' },
     ];
 
     expect(getRuleConflictState('a', conflicts)).toMatchObject({ severity: 'error', count: 2 });

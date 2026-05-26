@@ -50,22 +50,22 @@ describe('model-aliases compatibility API', () => {
   });
 
   it('serves CRUD at /api/admin/model-aliases while preserving /api/admin/aliases shape', async () => {
-    let res = await POST(jsonReq('POST', { alias: 'BossFast', target: 'gpt-4o-mini' }));
+    let res = await POST(jsonReq('POST', { alias: 'BossFast', target: 'gpt-5.4-mini' }));
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toMatchObject({
       success: true,
-      alias: { alias: 'bossfast', target: 'gpt-4o-mini', source: 'user' },
+      alias: { alias: 'bossfast', target: 'gpt-5.4-mini', source: 'user' },
     });
 
     res = await GET(jsonReq('GET'));
     const body = await res.json();
-    expect(body.aliases.bossfast).toMatchObject({ target: 'gpt-4o-mini', source: 'user' });
-    expect(body.aliases['gpt-4']).toMatchObject({ source: 'system' });
+    expect(body.aliases.bossfast).toMatchObject({ target: 'gpt-5.4-mini', source: 'user' });
+    expect(body.aliases['gpt-fast']).toMatchObject({ source: 'system' });
   });
 
   it('previews CSV import without persisting and reports duplicate/append conflicts', async () => {
-    await saveModelAliasConfig({ aliases: { fast: 'gpt-4o-mini' }, hidden: [] });
-    const csv = 'alias,target_model,hidden,note\nfast,gpt-4o,false,exists\nsmart,claude-3-5-sonnet-20241022,false,new\nsmart,gpt-4o-mini,false,duplicate\nbad alias,gpt-4o,false,bad\n';
+    await saveModelAliasConfig({ aliases: { fast: 'gpt-5.4-mini' }, hidden: [] });
+    const csv = 'alias,target_model,hidden,note\nfast,gpt-5.4,false,exists\nsmart,claude-sonnet-4-6,false,new\nsmart,gpt-5.4-mini,false,duplicate\nbad alias,gpt-5.4,false,bad\n';
 
     const res = await importPOST(csvReq(csv, 'append', true));
     expect(res.status).toBe(200);
@@ -75,17 +75,17 @@ describe('model-aliases compatibility API', () => {
     expect(body.stats).toMatchObject({ added: 1, updated: 0, skipped: 3, errors: 3 });
     expect(body.rows.slice(0, 4).map((row: { status: string }) => row.status)).toEqual(['skipped', 'added', 'error', 'error']);
     expect(body.errors.map((item: { error: string }) => item.error)).toContain('已存在');
-    await expect(getModelAliasConfig()).resolves.toMatchObject({ aliases: { fast: 'gpt-4o-mini' } });
+    await expect(getModelAliasConfig()).resolves.toMatchObject({ aliases: { fast: 'gpt-5.4-mini' } });
   });
 
   it('exports system and user aliases from the model-aliases endpoint for round-trip backup', async () => {
-    await saveModelAliasConfig({ aliases: { fast: 'gpt-4o-mini' }, hidden: ['gpt-4-turbo'] });
+    await saveModelAliasConfig({ aliases: { fast: 'gpt-5.4-mini' }, hidden: ['gpt-5.4'] });
 
     const res = await exportGET(jsonReq('GET', undefined, 'http://localhost/api/admin/model-aliases/export'));
     expect(res.headers.get('content-type')).toContain('text/csv');
     const csv = await res.text();
     expect(csv).toContain('alias,target_model,hidden,note');
-    expect(csv).toContain('gpt-4,gpt-4-turbo,true,系统默认');
-    expect(csv).toContain('fast,gpt-4o-mini,false,用户自定义');
+    expect(csv).toContain('gpt-latest,gpt-5.4,true,系统默认');
+    expect(csv).toContain('fast,gpt-5.4-mini,false,用户自定义');
   });
 });

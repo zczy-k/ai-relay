@@ -118,7 +118,7 @@ curl https://你的项目.vercel.app/health
 curl -X POST https://你的项目.vercel.app/v1/chat/completions \
   -H "Authorization: Bearer YOUR_RELAY_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"model": "gpt-4o", "messages": [{"role": "user", "content": "你好！"}]}'
+  -d '{"model": "gpt-5.4", "messages": [{"role": "user", "content": "你好！"}]}'
 ```
 
 🎉 **完成！** 你已经拥有一个支持多 Provider、自动故障转移的 AI API 中转服务。
@@ -174,7 +174,7 @@ client = OpenAI(
 )
 
 response = client.chat.completions.create(
-    model="gpt-4o",
+    model="gpt-5.4",
     messages=[{"role": "user", "content": "你好！"}]
 )
 ```
@@ -183,7 +183,7 @@ response = client.chat.completions.create(
 
 ```python
 stream = client.chat.completions.create(
-    model="gpt-4o",
+    model="gpt-5.4",
     messages=[{"role": "user", "content": "讲个故事"}],
     stream=True
 )
@@ -219,8 +219,8 @@ for chunk in stream:
 
 | Provider | 模型示例 | 状态 |
 |----------|---------|------|
-| OpenAI | gpt-4o, gpt-4, gpt-3.5-turbo | ✅ 内置 |
-| Anthropic (Claude) | claude-3.5-sonnet, claude-3-opus | ✅ 内置 |
+| OpenAI | gpt-5.4, gpt-latest, gpt-5.4-mini | ✅ 内置 |
+| Anthropic (Claude) | claude-sonnet-4-6, claude-opus-4-7 | ✅ 内置 |
 | DeepSeek | deepseek-v4-flash, deepseek-v4-pro | ✅ 内置 |
 | Xiaomi (MiMo) | mimo-7b | ✅ 内置 |
 | 自定义 | 任意 OpenAI 兼容 API | ✅ 可配置 |

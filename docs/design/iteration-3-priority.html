@@ -395,9 +395,9 @@ body {
           </div>
           <!-- Conflict inline message -->
           <div style="margin-top:10px;padding:10px 14px;border-radius:var(--radius-sm);background:var(--yellow-bg);border-left:3px solid var(--yellow)">
-            <div style="font-size:13px;color:var(--yellow);font-weight:600">⚠️ 与「GPT-4o 走 DeepSeek」条件存在交集</div>
+            <div style="font-size:13px;color:var(--yellow);font-weight:600">⚠️ 与「GPT-5.4 走 DeepSeek」条件存在交集</div>
             <div style="font-size:12px;color:var(--muted);margin-top:4px">
-              <code class="font-mono">gpt-4o</code>, <code class="font-mono">gpt-4o-mini</code> 将按本规则的优先级执行
+              <code class="font-mono">gpt-5.4</code>, <code class="font-mono">gpt-5.4-mini</code> 将按本规则的优先级执行
             </div>
           </div>
         </div>
@@ -418,12 +418,12 @@ body {
       <div class="flex gap-12" style="align-items:flex-start">
         <div style="cursor:grab;color:var(--muted);font-size:18px;line-height:1;padding-top:2px">≡</div>
         <div>
-          <div style="font-weight:600;font-size:15px">GPT-4o 走 DeepSeek</div>
+          <div style="font-weight:600;font-size:15px">GPT-5.4 走 DeepSeek</div>
           <div class="text-sm muted mt-12">
             <span class="pill" style="font-size:11px;padding:3px 8px">条件</span>
             <code class="font-mono" style="color:var(--blue);margin-left:6px">model</code>
             <code class="font-mono" style="color:var(--yellow);margin-left:4px">prefix</code>
-            <code class="font-mono" style="color:var(--text);margin-left:4px">"gpt-4o"</code>
+            <code class="font-mono" style="color:var(--text);margin-left:4px">"gpt-5.4"</code>
           </div>
           <div class="text-sm muted" style="margin-top:4px">
             <span class="pill" style="font-size:11px;padding:3px 8px">目标</span>
@@ -432,7 +432,7 @@ body {
           <div style="margin-top:10px;padding:10px 14px;border-radius:var(--radius-sm);background:var(--yellow-bg);border-left:3px solid var(--yellow)">
             <div style="font-size:13px;color:var(--yellow);font-weight:600">⚠️ 与「GPT 全系列走 OpenAI」条件存在交集</div>
             <div style="font-size:12px;color:var(--muted);margin-top:4px">
-              <code class="font-mono">gpt-4o</code>, <code class="font-mono">gpt-4o-mini</code> 将按规则 1 的优先级执行，本规则不会生效
+              <code class="font-mono">gpt-5.4</code>, <code class="font-mono">gpt-5.4-mini</code> 将按规则 1 的优先级执行，本规则不会生效
             </div>
           </div>
         </div>
@@ -519,7 +519,7 @@ body {
             <span class="pill" style="font-size:11px;padding:3px 8px">条件</span>
             <code class="font-mono" style="color:var(--blue);margin-left:6px">model</code>
             <code class="font-mono" style="color:var(--yellow);margin-left:4px">prefix</code>
-            <code class="font-mono" style="color:var(--text);margin-left:4px">"claude-3"</code>
+            <code class="font-mono" style="color:var(--text);margin-left:4px">"claude-sonnet"</code>
           </div>
           <div class="text-sm muted" style="margin-top:4px">
             <span class="pill" style="font-size:11px;padding:3px 8px">目标</span>
@@ -593,7 +593,7 @@ body {
       <div class="flex gap-8" style="align-items:center;margin-bottom:10px">
         <select class="select" style="width:100px"><option selected>model</option><option>provider</option></select>
         <select class="select" style="width:100px"><option>prefix</option><option selected>glob</option><option>exact</option></select>
-        <input class="input" style="flex:1" value="o?-mini" placeholder="输入匹配值" />
+        <input class="input" style="flex:1" value="gpt-5.?" placeholder="输入匹配值" />
         <button class="btn-icon" title="删除条件">✕</button>
       </div>
       <button class="btn btn-sm" style="width:100%;justify-content:center;margin-top:4px">＋ 添加条件</button>
@@ -647,7 +647,7 @@ body {
       <div style="padding:16px 24px">
         <div class="mb-16">
           <label class="label">规则名称</label>
-          <input class="input" style="width:100%" placeholder="如：GPT-4o 走 OpenAI" />
+          <input class="input" style="width:100%" placeholder="如：GPT-5.4 走 OpenAI" />
         </div>
 
         <div class="mb-16">
@@ -656,7 +656,7 @@ body {
             <div class="flex gap-8" style="align-items:center">
               <select class="select" style="width:90px"><option selected>model</option><option>provider</option></select>
               <select class="select" style="width:90px"><option selected>prefix</option><option>exact</option><option>glob</option></select>
-              <input class="input" style="flex:1" placeholder="如：gpt-4o" />
+              <input class="input" style="flex:1" placeholder="如：gpt-5.4" />
             </div>
             <div class="muted text-xs" style="margin-top:8px">可添加多个条件，所有条件必须同时匹配</div>
           </div>
@@ -778,7 +778,7 @@ body {
   <!-- Mobile conflict toast -->
   <div style="margin-top:12px;padding:12px 16px;border-radius:var(--radius-md);background:var(--yellow-bg);border:1px solid rgba(245,158,11,.25)">
     <div style="font-size:13px;color:var(--yellow);font-weight:600">⚠️ Toast 提示：条件存在交集</div>
-    <div class="text-xs muted" style="margin-top:2px">「GPT 全系列」和「GPT-4o 走 DeepSeek」的条件存在交集</div>
+    <div class="text-xs muted" style="margin-top:2px">「GPT 全系列」和「GPT-5.4 走 DeepSeek」的条件存在交集</div>
   </div>
 </section>
 

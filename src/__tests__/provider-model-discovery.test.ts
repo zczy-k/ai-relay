@@ -23,8 +23,8 @@ describe('admin provider upstream model discovery', () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       object: 'list',
       data: [
-        { id: 'gpt-4o-mini', object: 'model' },
-        { id: 'gpt-4o', object: 'model' },
+        { id: 'gpt-5.4-mini', object: 'model' },
+        { id: 'gpt-5.4', object: 'model' },
       ],
     }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
     vi.stubGlobal('fetch', fetchMock);
@@ -49,8 +49,8 @@ describe('admin provider upstream model discovery', () => {
       headers: expect.objectContaining({ Authorization: 'Bearer sk-test-key' }),
     }));
     expect(json.models).toEqual([
-      expect.objectContaining({ id: 'gpt-4o', displayName: 'gpt-4o', supportsStream: true }),
-      expect.objectContaining({ id: 'gpt-4o-mini', displayName: 'gpt-4o-mini', supportsStream: true }),
+      expect.objectContaining({ id: 'gpt-5.4', displayName: 'gpt-5.4', supportsStream: true }),
+      expect.objectContaining({ id: 'gpt-5.4-mini', displayName: 'gpt-5.4-mini', supportsStream: true }),
     ]);
   });
 

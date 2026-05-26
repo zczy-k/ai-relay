@@ -52,7 +52,7 @@ export const PROVIDER_TEMPLATES: ProviderTemplate[] = [
     displayName: 'OpenAI',
     baseUrl: 'https://api.openai.com/v1',
     headerFormat: 'openai',
-    modelPrefixes: ['gpt-', 'o1-', 'o3-', 'dall-e-', 'whisper-', 'tts-', 'text-embedding-'],
+    modelPrefixes: ['gpt-', 'dall-e-', 'whisper-', 'tts-', 'text-embedding-'],
     envKeyField: 'OPENAI_KEYS',
   },
   {

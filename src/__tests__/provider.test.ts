@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { resolveProvider, resolveFallbackModel, resolveUpstreamModel } from '../lib/providers/resolver';
 
 describe('GPT provider resolution tests', () => {
-  it('should route common and current GPT models to gw2', async () => {
+  it('should route current GPT models to gw2 and other OpenAI GPT models to OpenAI', async () => {
     const gpt55Provider = await resolveProvider('gpt-5.5');
     expect(gpt55Provider).not.toBeNull();
     expect(gpt55Provider?.name).toBe('gw2_oops_asia');
@@ -11,21 +11,17 @@ describe('GPT provider resolution tests', () => {
     expect(gpt54Provider).not.toBeNull();
     expect(gpt54Provider?.name).toBe('gw2_oops_asia');
 
+    const gpt54MiniProvider = await resolveProvider('gpt-5.4-mini');
+    expect(gpt54MiniProvider).not.toBeNull();
+    expect(gpt54MiniProvider?.name).toBe('gw2_oops_asia');
+
     const gpt53CodexProvider = await resolveProvider('gpt-5.3-codex');
     expect(gpt53CodexProvider).not.toBeNull();
     expect(gpt53CodexProvider?.name).toBe('gw2_oops_asia');
 
-    const gpt4oProvider = await resolveProvider('gpt-4o');
-    expect(gpt4oProvider).not.toBeNull();
-    expect(gpt4oProvider?.name).toBe('gw2_oops_asia');
-
-    const gpt4TurboProvider = await resolveProvider('gpt-4-turbo');
-    expect(gpt4TurboProvider).not.toBeNull();
-    expect(gpt4TurboProvider?.name).toBe('gw2_oops_asia');
-
-    const gpt35Provider = await resolveProvider('gpt-3.5-turbo');
-    expect(gpt35Provider).not.toBeNull();
-    expect(gpt35Provider?.name).toBe('gw2_oops_asia');
+    const otherGptProvider = await resolveProvider('gpt-6-preview');
+    expect(otherGptProvider).not.toBeNull();
+    expect(otherGptProvider?.name).toBe('openai');
   });
 });
 

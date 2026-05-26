@@ -28,7 +28,7 @@
     <div class="row"><span><span class="pill"><i class="dot green"></i> Provider tested</span></span><span>OpenAI · 842ms</span></div>
     <pre class="code">curl https://your-domain.vercel.app/v1/chat/completions \
   -H "Authorization: Bearer $AI_RELAY_KEY" \
-  -d '{"model":"gpt-4o-mini","messages":[...]}'</pre>
+  -d '{"model":"gpt-5.4-mini","messages":[...]}'</pre>
     <button class="primary">Send test request</button>
   </div>
   <div class="panel">
@@ -55,8 +55,8 @@
 <section class="panel">
   <h2>🧾 Request Logs</h2>
   <div class="row"><span><button>Last 24h</button> <button>All providers</button> <button>Errors first</button></span><button>Search Trace ID</button></div>
-  <div class="row"><code>03:12:09</code><strong>tr_c7a1...</strong><span>gpt-4o-mini</span><span>openai</span><span class="pill"><i class="dot green"></i> 200</span><span>842ms</span></div>
-  <div class="row"><code>03:10:44</code><strong>tr_a9f3...</strong><span>claude-3-5</span><span>anthropic</span><span class="pill"><i class="dot red"></i> 429</span><span>1.2s</span></div>
-  <div class="row"><code>03:08:17</code><strong>tr_1b20...</strong><span>gpt-4o</span><span>fallback → openai</span><span class="pill"><i class="dot yellow"></i> fallback</span><span>2.1s</span></div>
+  <div class="row"><code>03:12:09</code><strong>tr_c7a1...</strong><span>gpt-5.4-mini</span><span>openai</span><span class="pill"><i class="dot green"></i> 200</span><span>842ms</span></div>
+  <div class="row"><code>03:10:44</code><strong>tr_a9f3...</strong><span>claude-sonnet-5</span><span>anthropic</span><span class="pill"><i class="dot red"></i> 429</span><span>1.2s</span></div>
+  <div class="row"><code>03:08:17</code><strong>tr_1b20...</strong><span>gpt-5.4</span><span>fallback → openai</span><span class="pill"><i class="dot yellow"></i> fallback</span><span>2.1s</span></div>
 </section>
 </main></body></html>

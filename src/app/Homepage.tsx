@@ -108,7 +108,7 @@ const content = {
         title: '开始调用',
         description: '把客户端 base URL 指向你的 Relay，继续使用 OpenAI 兼容请求格式。',
         label: 'bash',
-        code: 'curl -X POST https://你的项目.vercel.app/v1/chat/completions \\\n  -H "Authorization: Bearer YOUR_RELAY_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d \'{"model":"gpt-4o","messages":[{"role":"user","content":"你好！"}]}\'',
+        code: 'curl -X POST https://你的项目.vercel.app/v1/chat/completions \\\n  -H "Authorization: Bearer YOUR_RELAY_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d \'{"model":"gpt-5.4","messages":[{"role":"user","content":"你好！"}]}\'',
       },
     ],
     endpoints: {
@@ -223,7 +223,7 @@ const content = {
         title: 'Call it',
         description: 'Point your client base URL to the relay and keep the OpenAI-compatible request format.',
         label: 'bash',
-        code: 'curl -X POST https://your-project.vercel.app/v1/chat/completions \\\n  -H "Authorization: Bearer YOUR_RELAY_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d \'{"model":"gpt-4o","messages":[{"role":"user","content":"Hello!"}]}\'',
+        code: 'curl -X POST https://your-project.vercel.app/v1/chat/completions \\\n  -H "Authorization: Bearer YOUR_RELAY_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d \'{"model":"gpt-5.4","messages":[{"role":"user","content":"Hello!"}]}\'',
       },
     ],
     endpoints: {

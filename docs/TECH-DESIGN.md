@@ -75,7 +75,7 @@ ai-relay/
 请求格式：
 ```json
 {
-  "model": "gpt-4o",           // 前缀决定路由到哪个 Provider
+  "model": "gpt-5.4",           // 前缀决定路由到哪个 Provider
   "messages": [...],
   "stream": true/false,
   "temperature": 0.7,
@@ -88,7 +88,7 @@ ai-relay/
 | model 前缀 | Provider | 上游 URL |
 |-----------|----------|---------|
 | `gpt-*` | OpenAI | `https://api.openai.com/v1/chat/completions` |
-| `o1-*`, `o3-*` | OpenAI | 同上 |
+| `gpt-5.5-*`, `gpt-5.4-*` | OpenAI | 同上 |
 | `claude-*` | Anthropic | `https://api.anthropic.com/v1/messages` |
 | `deepseek-*` | DeepSeek | `https://api.deepseek.com/v1/chat/completions` |
 | `mimo-*` | Xiaomi | `https://api.xiaomi.com/v1/chat/completions` |
@@ -193,6 +193,6 @@ RELAY_MONTHLY_LIMIT=30000   # 每月最大请求数
 | P0.4 | Key 轮换 + 429 故障重试 | ✅ 已完成 |
 | P0.5 | 用量追踪（Vercel KV） | ✅ 已完成 |
 | P0.6 | 流式响应（SSE 透传） | ✅ 已完成 |
-| P1.1 | 模型别名映射（gpt-4 → gpt-4-turbo 等） | ✅ 已完成 |
+| P1.1 | 模型别名映射（gpt-latest → gpt-5.4 等） | ✅ 已完成 |
 | P1.2 | 额度控制（每日/每月上限 + 429 超限提示） | ✅ 已完成 |
 | P1.3 | 管理面板（/admin — Key 池状态 + 用量统计） | ✅ 已完成 |

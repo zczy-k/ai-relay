@@ -9,7 +9,7 @@ import type { ProviderConfig } from './types';
  * To add a new provider, just add an entry here.
  */
 export const PROVIDERS: Record<string, ProviderConfig> = {
-  // ⚠️ lpgpt 排在 openai 前面，gpt-5.x 走 lpgpt，gpt-4o 等走 OpenAI
+  // ⚠️ lpgpt 排在 openai 前面，gpt-5.x 走 lpgpt，其他 OpenAI 前缀走 OpenAI
   lpgpt: {
     name: 'lpgpt',
     displayName: 'LPGPT (GPT-5)',
@@ -29,40 +29,32 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
     name: 'gw2_oops_asia',
     displayName: 'GW2 Oops Asia',
     baseUrl: 'https://gw2.oops.asia/v1',
-    modelPrefixes: ['gpt-5.3-codex', 'gpt-5.5', 'gpt-5.4', 'gpt-5.3', 'gpt-4o', 'gpt-4-', 'gpt-3.5'],
+    modelPrefixes: ['gpt-5.5', 'gpt-5.4', 'gpt-5.3-codex', 'gpt-5.3'],
     headerFormat: 'openai',
     envKeyField: 'GW2_OOPS_ASIA_KEYS',
     envBaseUrlField: 'GW2_OOPS_ASIA_BASE_URL',
     models: [
-      { id: 'gpt-5.5', displayName: 'GPT-5.5', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsVision: true, supportsTools: true },
-      { id: 'gpt-5.4', displayName: 'GPT-5.4', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsVision: true, supportsTools: true },
+      { id: 'gpt-5.5', displayName: 'GPT-5.5', contextWindow: 1000000, maxOutput: 128000, supportsStream: true, supportsVision: true, supportsTools: true },
+      { id: 'gpt-5.4', displayName: 'GPT-5.4', contextWindow: 1000000, maxOutput: 128000, supportsStream: true, supportsVision: true, supportsTools: true },
+      { id: 'gpt-5.4-mini', displayName: 'GPT-5.4 Mini', contextWindow: 400000, maxOutput: 128000, supportsStream: true, supportsVision: true, supportsTools: true },
+      { id: 'gpt-5.4-nano', displayName: 'GPT-5.4 Nano', contextWindow: 400000, maxOutput: 128000, supportsStream: true, supportsVision: true, supportsTools: true },
       { id: 'gpt-5.3-codex', displayName: 'GPT-5.3 Codex', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsVision: true, supportsTools: true },
       { id: 'gpt-5.3', displayName: 'GPT-5.3', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsVision: true, supportsTools: true },
-      { id: 'gpt-4o', displayName: 'GPT-4o', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsVision: true, supportsTools: true },
-      { id: 'gpt-4o-mini', displayName: 'GPT-4o Mini', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsVision: true, supportsTools: true },
-      { id: 'gpt-4-turbo', displayName: 'GPT-4 Turbo', contextWindow: 128000, maxOutput: 4096, supportsStream: true, supportsVision: true, supportsTools: true },
-      { id: 'gpt-3.5-turbo', displayName: 'GPT-3.5 Turbo', contextWindow: 16385, maxOutput: 4096, supportsStream: true, supportsTools: true },
     ],
   },
   openai: {
     name: 'openai',
     displayName: 'OpenAI',
     baseUrl: 'https://api.openai.com/v1',
-    modelPrefixes: ['gpt-', 'o1-', 'o3-', 'o4-', 'chatgpt-', 'dall-e-'],
+    modelPrefixes: ['gpt-', 'dall-e-'],
     headerFormat: 'openai',
     envKeyField: 'OPENAI_KEYS',
     envBaseUrlField: 'OPENAI_BASE_URL',
     models: [
-      { id: 'gpt-4o', displayName: 'GPT-4o', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsVision: true, supportsTools: true, pricing: { input: 2.5, output: 10 } },
-      { id: 'gpt-4o-mini', displayName: 'GPT-4o Mini', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsVision: true, supportsTools: true, pricing: { input: 0.15, output: 0.6 } },
-      { id: 'gpt-4-turbo', displayName: 'GPT-4 Turbo', contextWindow: 128000, maxOutput: 4096, supportsStream: true, supportsVision: true, supportsTools: true, pricing: { input: 10, output: 30 } },
-      { id: 'o1', displayName: 'o1', contextWindow: 200000, maxOutput: 100000, supportsStream: true, supportsTools: true },
-      { id: 'o1-mini', displayName: 'o1 Mini', contextWindow: 128000, maxOutput: 65536, supportsStream: true },
-      { id: 'o3', displayName: 'o3', contextWindow: 200000, maxOutput: 100000, supportsStream: true, supportsVision: true, supportsTools: true },
-      { id: 'o3-mini', displayName: 'o3 Mini', contextWindow: 200000, maxOutput: 100000, supportsStream: true, supportsTools: true },
-      { id: 'o4-mini', displayName: 'o4 Mini', contextWindow: 200000, maxOutput: 100000, supportsStream: true, supportsVision: true, supportsTools: true },
-      { id: 'chatgpt-4o-latest', displayName: 'ChatGPT-4o Latest', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsVision: true, supportsTools: true },
-      { id: 'gpt-3.5-turbo', displayName: 'GPT-3.5 Turbo', contextWindow: 16385, maxOutput: 4096, supportsStream: true, supportsTools: true, pricing: { input: 0.5, output: 1.5 } },
+      { id: 'gpt-5.5', displayName: 'GPT-5.5', contextWindow: 1000000, maxOutput: 128000, supportsStream: true, supportsVision: true, supportsTools: true, pricing: { input: 5, output: 30 } },
+      { id: 'gpt-5.4', displayName: 'GPT-5.4', contextWindow: 1000000, maxOutput: 128000, supportsStream: true, supportsVision: true, supportsTools: true, pricing: { input: 2.5, output: 15 } },
+      { id: 'gpt-5.4-mini', displayName: 'GPT-5.4 Mini', contextWindow: 400000, maxOutput: 128000, supportsStream: true, supportsVision: true, supportsTools: true, pricing: { input: 0.75, output: 4.5 } },
+      { id: 'gpt-5.4-nano', displayName: 'GPT-5.4 Nano', contextWindow: 400000, maxOutput: 128000, supportsStream: true, supportsVision: true, supportsTools: true },
     ],
   },
   anthropic: {
@@ -74,11 +66,9 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
     envKeyField: 'CLAUDE_KEYS',
     envBaseUrlField: 'CLAUDE_BASE_URL',
     models: [
-      { id: 'claude-opus-4-20250514', displayName: 'Claude Opus 4', contextWindow: 200000, maxOutput: 32000, supportsStream: true, supportsVision: true, supportsTools: true, pricing: { input: 15, output: 75 } },
-      { id: 'claude-sonnet-4-20250514', displayName: 'Claude Sonnet 4', contextWindow: 200000, maxOutput: 16000, supportsStream: true, supportsVision: true, supportsTools: true, pricing: { input: 3, output: 15 } },
-      { id: 'claude-3-5-sonnet-20241022', displayName: 'Claude 3.5 Sonnet', contextWindow: 200000, maxOutput: 8192, supportsStream: true, supportsVision: true, supportsTools: true, pricing: { input: 3, output: 15 } },
-      { id: 'claude-3-5-haiku-20241022', displayName: 'Claude 3.5 Haiku', contextWindow: 200000, maxOutput: 8192, supportsStream: true, supportsVision: true, supportsTools: true, pricing: { input: 0.8, output: 4 } },
-      { id: 'claude-3-opus-20240229', displayName: 'Claude 3 Opus', contextWindow: 200000, maxOutput: 4096, supportsStream: true, supportsVision: true, supportsTools: true, pricing: { input: 15, output: 75 } },
+      { id: 'claude-opus-4-7', displayName: 'Claude Opus 4.7', contextWindow: 1000000, maxOutput: 128000, supportsStream: true, supportsVision: true, supportsTools: true, pricing: { input: 5, output: 25 } },
+      { id: 'claude-sonnet-4-6', displayName: 'Claude Sonnet 4.6', contextWindow: 1000000, maxOutput: 64000, supportsStream: true, supportsVision: true, supportsTools: true, pricing: { input: 3, output: 15 } },
+      { id: 'claude-haiku-4-5-20251001', displayName: 'Claude Haiku 4.5', contextWindow: 200000, maxOutput: 64000, supportsStream: true, supportsVision: true, supportsTools: true, pricing: { input: 1, output: 5 } },
     ],
   },
   deepseek: {

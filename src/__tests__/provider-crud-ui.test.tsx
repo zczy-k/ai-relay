@@ -46,7 +46,7 @@ describe('iteration one provider CRUD UI helpers', () => {
       displayName: 'OpenAI',
       baseUrl: 'https://api.openai.com/v1',
       headerFormat: 'openai',
-      modelPrefixesText: 'gpt-, o1- , text-embedding-',
+      modelPrefixesText: 'gpt-, gpt-5.5- , text-embedding-',
       models: [],
     });
 
@@ -55,7 +55,7 @@ describe('iteration one provider CRUD UI helpers', () => {
       displayName: 'OpenAI',
       baseUrl: 'https://api.openai.com/v1',
       headerFormat: 'openai',
-      modelPrefixes: ['gpt-', 'o1-', 'text-embedding-'],
+      modelPrefixes: ['gpt-', 'gpt-5.5-', 'text-embedding-'],
       envKeyField: 'OPENAI_KEYS',
     });
   });

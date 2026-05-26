@@ -351,7 +351,7 @@ export default function CustomProviderModal({
             </label>
             <input
               type="text"
-              placeholder="gpt-4o-mini"
+              placeholder="gpt-5.4-mini"
               value={testModelId}
               onChange={(e) => setTestModelId(e.target.value)}
               style={{

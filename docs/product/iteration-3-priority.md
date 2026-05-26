@@ -88,7 +88,7 @@ interface Condition {
 | field | 含义 | 示例 |
 |-------|------|------|
 | `model_prefix` | 模型 ID 前缀 | `gpt-`、`claude-`、`gemini-` |
-| `model_exact` | 模型 ID 精确匹配 | `gpt-4-turbo` |
+| `model_exact` | 模型 ID 精确匹配 | `gpt-5.4` |
 | `request_source` | 请求来源标识 | `internal`、`external`、`partner-xxx` |
 | `header` | 自定义 Header 值 | `X-Tenant: acme` |
 
@@ -131,7 +131,7 @@ interface Condition {
 │  ┌─ 规则卡片 ─────────────────────────────────────────┐  │
 │  │  ≡  #1  OpenAI                                     │  │
 │  │       条件: model_prefix = gpt-*                    │  │
-│  │       └─ AND model_prefix = o1-*                    │  │
+│  │       └─ AND model_prefix = gpt-5.5-*                    │  │
 │  │                                        [编辑] [删除] │  │
 │  └─────────────────────────────────────────────────────┘  │
 │                                                          │
@@ -186,7 +186,7 @@ interface Condition {
 │  │                                          [✕] │  │
 │  └─────────────────────────────────────────────┘  │
 │  ┌─ 条件行 ─────────────────────────────────────┐  │
-│  │ [模型前缀 ▼]  [starts_with ▼]  [o1-       ] │  │
+│  │ [模型前缀 ▼]  [starts_with ▼]  [gpt-5.5-       ] │  │
 │  │                                          [✕] │  │
 │  └─────────────────────────────────────────────┘  │
 │                                                   │
@@ -221,8 +221,8 @@ interface Condition {
 | 冲突类型 | 严重级别 | 说明 | 示例 |
 |---------|---------|------|------|
 | 条件完全重叠 | 🔴 错误 | 两条规则条件完全相同，低优先级规则永远不会命中 | 规则 A：`model_prefix=gpt-*`，规则 B：`model_prefix=gpt-*` |
-| 条件包含重叠 | 🟡 警告 | 一条规则的条件是另一条的子集，高优先级规则会"吞掉"低优先级 | 规则 A：`model_prefix=gpt-*`，规则 B：`model_prefix=gpt-4-*` |
-| 同供应商重复 | 🟡 警告 | 多条规则指向同一供应商，可能合并 | 规则 A：OpenAI（gpt-*），规则 B：OpenAI（o1-*） |
+| 条件包含重叠 | 🟡 警告 | 一条规则的条件是另一条的子集，高优先级规则会"吞掉"低优先级 | 规则 A：`model_prefix=gpt-*`，规则 B：`model_prefix=gpt-5.4-*` |
+| 同供应商重复 | 🟡 警告 | 多条规则指向同一供应商，可能合并 | 规则 A：OpenAI（gpt-*），规则 B：OpenAI（gpt-5.5-*） |
 | 规则上限 | 🔴 错误 | 规则数达到 20 条上限 | — |
 
 #### 检测时机
@@ -249,7 +249,7 @@ for each rule_pair (A, B) where A.priority < B.priority:
 
 conditions_overlap(A, B):
   检查是否存在 model_prefix 重叠：
-    如 "gpt-*" 和 "gpt-4-*" → 重叠
+    如 "gpt-*" 和 "gpt-5.4-*" → 重叠
     如 "gpt-*" 和 "claude-*" → 不重叠
   检查是否存在 model_exact 重复
   检查 request_source 重复
@@ -265,7 +265,7 @@ conditions_overlap(A, B):
 
 **冲突文字示例**：
 - ⚠️ 与 #1 冲突：条件完全重叠，此规则永远不会命中
-- ⚠️ 与 #1 条件重叠：`gpt-4-*` 是 `gpt-*` 的子集
+- ⚠️ 与 #1 条件重叠：`gpt-5.4-*` 是 `gpt-*` 的子集
 - ⚠️ 与 #1 指向同一供应商，建议合并条件
 
 ---
@@ -287,7 +287,7 @@ conditions_overlap(A, B):
       "provider": "openai",
       "conditions": [
         { "field": "model_prefix", "operator": "starts_with", "value": "gpt-" },
-        { "field": "model_prefix", "operator": "starts_with", "value": "o1-" }
+        { "field": "model_prefix", "operator": "starts_with", "value": "gpt-5.5-" }
       ],
       "enabled": true,
       "createdAt": "2026-05-26T00:00:00Z",
@@ -473,8 +473,8 @@ function matchCondition(condition: Condition, request: Request): boolean {
 1. 添加规则 #1：`model_prefix starts_with gpt-` → OpenAI
 2. 添加规则 #2：`model_prefix starts_with claude-` → Anthropic
 3. 拖拽排序使 #1 在 #2 前面
-4. 请求 `gpt-4-turbo` 时路由到 OpenAI
-5. 请求 `claude-3-5-sonnet` 时路由到 Anthropic
+4. 请求 `gpt-5.4` 时路由到 OpenAI
+5. 请求 `claude-sonnet-4-6` 时路由到 Anthropic
 
 #### US-2：配置主备切换规则
 
@@ -486,8 +486,8 @@ function matchCondition(condition: Condition, request: Request): boolean {
 1. 添加规则：`model_prefix starts_with gpt-` → OpenAI（#1）
 2. 添加规则：`model_prefix starts_with gpt-` → DeepSeek（#2）
 3. 冲突检测标红 #2：「与 #1 条件完全重叠」
-4. 修改 #2 条件为 `model_prefix starts_with gpt-4-turbo`（更精确）
-5. 冲突降级为警告：「与 #1 条件重叠，gpt-4-turbo 是 gpt- 的子集」
+4. 修改 #2 条件为 `model_prefix starts_with gpt-5.4`（更精确）
+5. 冲突降级为警告：「与 #1 条件重叠，gpt-5.4 是 gpt- 的子集」
 
 #### US-3：禁用临时规则
 

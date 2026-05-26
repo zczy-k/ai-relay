@@ -15,7 +15,7 @@ function installMockKV() {
 function usageEvent(overrides: Partial<Parameters<typeof createUsageEvent>[0]> = {}) {
   return createUsageEvent({
     provider: 'openai',
-    model: 'gpt-4o-mini',
+    model: 'gpt-5.4-mini',
     apiKeyHash: 'keyhash1',
     statusCode: 200,
     promptTokens: 10,

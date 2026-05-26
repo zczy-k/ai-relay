@@ -6,14 +6,15 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const SYSTEM_ALIASES: Record<string, string> = {
-  'gpt-4': 'gpt-4-turbo',
-  'gpt-3.5': 'gpt-3.5-turbo',
-  'claude-3': 'claude-3-5-sonnet-20241022',
-  'claude-3-opus': 'claude-3-opus-20240229',
-  'claude-3-sonnet': 'claude-3-5-sonnet-20241022',
-  'claude-3-haiku': 'claude-3-5-haiku-20241022',
-  'deepseek-chat': 'deepseek-v4-flash',
-  'deepseek-reasoner': 'deepseek-v4-pro',
+  'gpt-best': 'gpt-5.5',
+  'gpt-latest': 'gpt-5.4',
+  'gpt-fast': 'gpt-5.4-mini',
+  'gpt-cheap': 'gpt-5.4-nano',
+  'claude-best': 'claude-opus-4-7',
+  'claude-sonnet': 'claude-sonnet-4-6',
+  'claude-fast': 'claude-haiku-4-5-20251001',
+  'deepseek-fast': 'deepseek-v4-flash',
+  'deepseek-pro': 'deepseek-v4-pro',
 };
 
 function esc(value: string): string {

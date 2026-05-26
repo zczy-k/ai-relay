@@ -359,7 +359,7 @@ export default function ModelKeyTest({
                 {selectedModelId === '__custom__' && (
                   <input
                     type="text"
-                    placeholder={lang === 'zh' ? '输入模型 ID，如 gpt-4o' : 'Enter model ID, e.g. gpt-4o'}
+                    placeholder={lang === 'zh' ? '输入模型 ID，如 gpt-5.4' : 'Enter model ID, e.g. gpt-5.4'}
                     value={customModelId}
                     onChange={(e) => {
                       setCustomModelId(e.target.value);

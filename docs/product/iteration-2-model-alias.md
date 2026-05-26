@@ -14,8 +14,8 @@ AI Relay 当前的模型别名映射是**硬编码**在 `src/lib/providers/resol
 
 ```typescript
 const MODEL_ALIASES: Record<string, string> = {
-  'gpt-4': 'gpt-4-turbo',
-  'claude-3': 'claude-3-5-sonnet-20241022',
+  'gpt-latest': 'gpt-5.4',
+  'claude-sonnet': 'claude-sonnet-4-6',
   // ...
 };
 ```
@@ -23,7 +23,7 @@ const MODEL_ALIASES: Record<string, string> = {
 这带来三个问题：
 
 1. **不可运维** — 修改别名需要改代码、重新部署
-2. **不可扩展** — 用户无法添加自己的别名（如公司内部命名 `my-fast-model` → `gpt-4o-mini`）
+2. **不可扩展** — 用户无法添加自己的别名（如公司内部命名 `my-fast-model` → `gpt-5.4-mini`）
 3. **模型管理缺失** — 没有批量导入、没有低频模型隐藏，Admin 面板看不到完整模型列表
 
 圆桌讨论（rt_262195df）已确认迭代二的范围和方案。
@@ -38,7 +38,7 @@ const MODEL_ALIASES: Record<string, string> = {
 
 | 角色 | 场景 |
 |------|------|
-| 个人开发者 | 自定义别名简化调用（`fast` → `gpt-4o-mini`） |
+| 个人开发者 | 自定义别名简化调用（`fast` → `gpt-5.4-mini`） |
 | 小团队管理员 | CSV 批量导入团队约定的模型命名规范 |
 | 开源用户 | 首次部署时通过 CSV 快速迁移已有配置 |
 
@@ -77,11 +77,11 @@ const MODEL_ALIASES: Record<string, string> = {
 
 ```json
 {
-  "gpt-4": "gpt-4-turbo",
-  "gpt-3.5": "gpt-3.5-turbo",
-  "claude-3": "claude-3-5-sonnet-20241022",
-  "fast": "gpt-4o-mini",
-  "smart": "claude-3-5-sonnet-20241022"
+  "gpt-latest": "gpt-5.4",
+  "gpt-fast": "gpt-5.4-mini",
+  "claude-sonnet": "claude-sonnet-4-6",
+  "fast": "gpt-5.4-mini",
+  "smart": "claude-sonnet-4-6"
 }
 ```
 
@@ -102,7 +102,7 @@ const MODEL_ALIASES: Record<string, string> = {
 - **操作列**：悬停显示「编辑」「删除」按钮
 - **新增**：表格底部固定一行，点击「+ 添加别名」展开编辑行
 - **编辑**：行内编辑，别名和目标模型均为可编辑输入框
-- **删除**：二次确认弹窗（「确认删除别名 `fast` → `gpt-4o-mini`？」）
+- **删除**：二次确认弹窗（「确认删除别名 `fast` → `gpt-5.4-mini`？」）
 
 #### 别名规则
 
@@ -148,10 +148,10 @@ const MODEL_ALIASES: Record<string, string> = {
 
 ```csv
 alias,target_model,hidden,note
-gpt-4,gpt-4-turbo,false,系统默认
-fast,gpt-4o-mini,false,团队约定
-smart,claude-3-5-sonnet-20241022,false,团队约定
-legacy-model,davinci-002,true,已弃用
+gpt-latest,gpt-5.4,false,系统默认
+fast,gpt-5.4-mini,false,团队约定
+smart,claude-sonnet-4-6,false,团队约定
+legacy-model,gpt-5.4-nano,true,已弃用
 ```
 
 #### 导入流程
@@ -210,10 +210,10 @@ legacy-model,davinci-002,true,已弃用
 ```json
 {
   "aliases": {
-    "gpt-4": "gpt-4-turbo",
-    "fast": "gpt-4o-mini"
+    "gpt-latest": "gpt-5.4",
+    "fast": "gpt-5.4-mini"
   },
-  "hidden": ["davinci-002", "gpt-3.5-turbo-instruct"]
+  "hidden": ["gpt-5.4-nano", "gpt-5.4-mini"]
 }
 ```
 
@@ -265,10 +265,10 @@ legacy-model,davinci-002,true,已弃用
 ```json
 {
   "aliases": {
-    "gpt-4": { "target": "gpt-4-turbo", "source": "system" },
-    "fast": { "target": "gpt-4o-mini", "source": "user" }
+    "gpt-latest": { "target": "gpt-5.4", "source": "system" },
+    "fast": { "target": "gpt-5.4-mini", "source": "user" }
   },
-  "hidden": ["davinci-002"],
+  "hidden": ["gpt-5.4-nano"],
   "total": 15
 }
 ```
@@ -278,7 +278,7 @@ legacy-model,davinci-002,true,已弃用
 ```json
 {
   "alias": "fast",
-  "target": "gpt-4o-mini",
+  "target": "gpt-5.4-mini",
   "hidden": false
 }
 ```
@@ -325,7 +325,7 @@ legacy-model,davinci-002,true,已弃用
 | 风险 | 影响 | 应对 |
 |------|------|------|
 | 别名循环引用 | A→B→A 导致无限解析 | 解析时检测循环，最大深度 5 |
-| 别名覆盖核心模型名 | 用户将 `gpt-4o` 别名指向错误模型 | 系统别名不可删除，目标模型校验 |
+| 别名覆盖核心模型名 | 用户将 `gpt-5.4` 别名指向错误模型 | 系统别名不可删除，目标模型校验 |
 | CSV 导入覆盖误操作 | 覆盖模式丢失已有配置 | 二次确认 + 导出备份提示 |
 | 缓存不一致 | 修改后最多 5 分钟延迟 | 提供「立即刷新」按钮 |
 | KV 值格式迁移 | 旧格式（纯对象）→ 新结构 | 读取时自动检测并迁移 |

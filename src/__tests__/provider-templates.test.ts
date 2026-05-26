@@ -108,7 +108,7 @@ describe('provider templates', () => {
   });
 
   it('parses model prefixes from comma or newline separated input', () => {
-    expect(parseModelPrefixes('gpt-, o1-\n text-embedding-')).toEqual(['gpt-', 'o1-', 'text-embedding-']);
+    expect(parseModelPrefixes('gpt-, gpt-5.5-\n text-embedding-')).toEqual(['gpt-', 'gpt-5.5-', 'text-embedding-']);
     expect(parseModelPrefixes('  ,\n  ')).toEqual([]);
   });
 
@@ -118,8 +118,8 @@ describe('provider templates', () => {
       displayName: 'Custom OpenAI',
       baseUrl: 'https://proxy.example.com/v1',
       headerFormat: 'openai',
-      modelPrefixesText: 'gpt-, o3-',
-      models: [{ id: 'gpt-4o', displayName: 'GPT-4o', contextWindow: 128000 }],
+      modelPrefixesText: 'gpt-, gpt-5.4-',
+      models: [{ id: 'gpt-5.4', displayName: 'GPT-5.4', contextWindow: 128000 }],
     });
 
     expect(draft).toMatchObject({
@@ -128,8 +128,8 @@ describe('provider templates', () => {
       baseUrl: 'https://proxy.example.com/v1',
       headerFormat: 'openai',
       envKeyField: 'CUSTOM_OPENAI_KEYS',
-      modelPrefixes: ['gpt-', 'o3-'],
-      models: [{ id: 'gpt-4o', displayName: 'GPT-4o', contextWindow: 128000 }],
+      modelPrefixes: ['gpt-', 'gpt-5.4-'],
+      models: [{ id: 'gpt-5.4', displayName: 'GPT-5.4', contextWindow: 128000 }],
     });
   });
 });

@@ -118,7 +118,7 @@ curl https://your-project.vercel.app/health
 curl -X POST https://your-project.vercel.app/v1/chat/completions \
   -H "Authorization: Bearer YOUR_RELAY_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"model": "gpt-4o", "messages": [{"role": "user", "content": "Hello!"}]}'
+  -d '{"model": "gpt-5.4", "messages": [{"role": "user", "content": "Hello!"}]}'
 ```
 
 🎉 **Done!** You now have a multi-provider AI API relay with automatic failover.
@@ -174,7 +174,7 @@ client = OpenAI(
 )
 
 response = client.chat.completions.create(
-    model="gpt-4o",
+    model="gpt-5.4",
     messages=[{"role": "user", "content": "Hello!"}]
 )
 ```
@@ -183,7 +183,7 @@ response = client.chat.completions.create(
 
 ```python
 stream = client.chat.completions.create(
-    model="gpt-4o",
+    model="gpt-5.4",
     messages=[{"role": "user", "content": "Tell me a story"}],
     stream=True
 )
@@ -219,8 +219,8 @@ Generate time-limited keys from the Admin dashboard:
 
 | Provider | Example Models | Status |
 |----------|---------------|--------|
-| OpenAI | gpt-4o, gpt-4, gpt-3.5-turbo | ✅ Built-in |
-| Anthropic (Claude) | claude-3.5-sonnet, claude-3-opus | ✅ Built-in |
+| OpenAI | gpt-5.4, gpt-latest, gpt-5.4-mini | ✅ Built-in |
+| Anthropic (Claude) | claude-sonnet-4-6, claude-opus-4-7 | ✅ Built-in |
 | DeepSeek | deepseek-v4-flash, deepseek-v4-pro | ✅ Built-in |
 | Xiaomi (MiMo) | mimo-7b | ✅ Built-in |
 | Custom | Any OpenAI-compatible API | ✅ Configurable |

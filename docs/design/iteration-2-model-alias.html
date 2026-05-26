@@ -153,24 +153,24 @@
 
     <!-- 系统默认行 -->
     <div class="alias-row">
-      <div class="alias-name"><code class="mono">gpt-4</code></div>
-      <div class="muted">gpt-4-turbo</div>
+      <div class="alias-name"><code class="mono">gpt-latest</code></div>
+      <div class="muted">gpt-5.4</div>
       <div><span class="badge-system">系统默认</span></div>
       <div style="text-align:center"><span class="visibility-toggle on" title="可见" aria-label="可见">👁</span></div>
       <div class="actions" style="justify-content:flex-end"><button class="btn ghost">编辑</button><button class="btn ghost" style="color:var(--faint);cursor:default">删除</button></div>
     </div>
 
     <div class="alias-row">
-      <div class="alias-name"><code class="mono">gpt-3.5</code></div>
-      <div class="muted">gpt-3.5-turbo</div>
+      <div class="alias-name"><code class="mono">gpt-fast</code></div>
+      <div class="muted">gpt-5.4-mini</div>
       <div><span class="badge-system">系统默认</span></div>
       <div style="text-align:center"><span class="visibility-toggle on" title="可见" aria-label="可见">👁</span></div>
       <div class="actions" style="justify-content:flex-end"><button class="btn ghost">编辑</button><button class="btn ghost" style="color:var(--faint);cursor:default">删除</button></div>
     </div>
 
     <div class="alias-row">
-      <div class="alias-name"><code class="mono">claude-3</code></div>
-      <div class="muted">claude-3-5-sonnet-20241022</div>
+      <div class="alias-name"><code class="mono">claude-sonnet</code></div>
+      <div class="muted">claude-sonnet-4-6</div>
       <div><span class="badge-system">系统默认</span></div>
       <div style="text-align:center"><span class="visibility-toggle on" title="可见" aria-label="可见">👁</span></div>
       <div class="actions" style="justify-content:flex-end"><button class="btn ghost">编辑</button><button class="btn ghost" style="color:var(--faint);cursor:default">删除</button></div>
@@ -179,7 +179,7 @@
     <!-- 用户自定义行 -->
     <div class="alias-row">
       <div class="alias-name"><code class="mono">fast</code></div>
-      <div class="muted">gpt-4o-mini</div>
+      <div class="muted">gpt-5.4-mini</div>
       <div><span class="badge-user">用户自定义</span></div>
       <div style="text-align:center"><span class="visibility-toggle on" title="可见" aria-label="可见">👁</span></div>
       <div class="actions" style="justify-content:flex-end"><button class="btn ghost">编辑</button><button class="btn ghost danger">删除</button></div>
@@ -187,7 +187,7 @@
 
     <div class="alias-row">
       <div class="alias-name"><code class="mono">smart</code></div>
-      <div class="muted">claude-3-5-sonnet-20241022</div>
+      <div class="muted">claude-sonnet-4-6</div>
       <div><span class="badge-user">用户自定义</span></div>
       <div style="text-align:center"><span class="visibility-toggle on" title="可见" aria-label="可见">👁</span></div>
       <div class="actions" style="justify-content:flex-end"><button class="btn ghost">编辑</button><button class="btn ghost danger">删除</button></div>
@@ -212,7 +212,7 @@
     <!-- 隐藏行 -->
     <div class="alias-row hidden-row">
       <div class="alias-name"><code class="mono">legacy-model</code></div>
-      <div class="muted">davinci-002</div>
+      <div class="muted">gpt-5.4-nano</div>
       <div><span class="badge-user">用户自定义</span></div>
       <div style="text-align:center"><span class="visibility-toggle" title="已隐藏" aria-label="已隐藏">–</span></div>
       <div class="actions" style="justify-content:flex-end"><button class="btn ghost">编辑</button><button class="btn ghost danger">删除</button></div>
@@ -220,7 +220,7 @@
 
     <div class="alias-row hidden-row">
       <div class="alias-name"><code class="mono">old-instruct</code></div>
-      <div class="muted">gpt-3.5-turbo-instruct</div>
+      <div class="muted">gpt-5.4-mini</div>
       <div><span class="badge-user">用户自定义</span></div>
       <div style="text-align:center"><span class="visibility-toggle" title="已隐藏" aria-label="已隐藏">–</span></div>
       <div class="actions" style="justify-content:flex-end"><button class="btn ghost">编辑</button><button class="btn ghost danger">删除</button></div>
@@ -270,19 +270,19 @@
     </div>
     <div class="csv-row">
       <div><code class="mono">fast</code></div>
-      <div class="muted">gpt-4o-mini</div>
+      <div class="muted">gpt-5.4-mini</div>
       <div>false</div>
       <div><span class="badge-ok">更新</span></div>
     </div>
     <div class="csv-row">
       <div><code class="mono">smart</code></div>
-      <div class="muted">claude-3-5-sonnet-20241022</div>
+      <div class="muted">claude-sonnet-4-6</div>
       <div>false</div>
       <div><span class="badge-ok">更新</span></div>
     </div>
     <div class="csv-row">
       <div><code class="mono">vision</code></div>
-      <div class="muted">gpt-4o</div>
+      <div class="muted">gpt-5.4</div>
       <div>false</div>
       <div><span class="badge-ok">新增</span></div>
     </div>
@@ -355,14 +355,14 @@
   <div class="panel">
     <h2>导出预览</h2>
     <pre class="mono" style="margin:0;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--panel3);white-space:pre;line-height:1.7;font-size:12px">alias,target_model,hidden,note
-gpt-4,gpt-4-turbo,false,系统默认
-gpt-3.5,gpt-3.5-turbo,false,系统默认
-claude-3,claude-3-5-sonnet-20241022,false,系统默认
-fast,gpt-4o-mini,false,团队约定
-smart,claude-3-5-sonnet-20241022,false,团队约定
+gpt-latest,gpt-5.4,false,系统默认
+gpt-fast,gpt-5.4-mini,false,系统默认
+claude-sonnet,claude-sonnet-4-6,false,系统默认
+fast,gpt-5.4-mini,false,团队约定
+smart,claude-sonnet-4-6,false,团队约定
 deep,deepseek-r1,false,团队约定
 mini,gemini-1.5-flash,false,团队约定
-legacy-model,davinci-002,true,已弃用</pre>
+legacy-model,gpt-5.4-nano,true,已弃用</pre>
   </div>
 </section>
 
@@ -376,11 +376,11 @@ legacy-model,davinci-002,true,已弃用</pre>
       <div class="alias-row" style="background:rgba(96,165,250,.06);border-color:var(--active)">
         <div><input class="input" style="height:36px" value="fast" readonly /></div>
         <div>
-          <input class="input" style="height:36px" value="gpt-4o" />
+          <input class="input" style="height:36px" value="gpt-5.4" />
           <div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">
-            <span class="tag" style="font-size:11px;cursor:pointer">gpt-4o</span>
-            <span class="tag" style="font-size:11px;cursor:pointer">gpt-4o-mini</span>
-            <span class="tag" style="font-size:11px;cursor:pointer">gpt-4-turbo</span>
+            <span class="tag" style="font-size:11px;cursor:pointer">gpt-5.4</span>
+            <span class="tag" style="font-size:11px;cursor:pointer">gpt-5.4-mini</span>
+            <span class="tag" style="font-size:11px;cursor:pointer">gpt-5.4</span>
           </div>
         </div>
         <div><span class="badge-user">用户自定义</span></div>
@@ -402,10 +402,10 @@ legacy-model,davinci-002,true,已弃用</pre>
     <div class="alias-wrap">
       <div class="alias-row" style="background:rgba(239,68,68,.06);border-color:rgba(239,68,68,.35)">
         <div>
-          <input class="input error" style="height:36px" value="gpt-4" />
+          <input class="input error" style="height:36px" value="gpt-latest" />
           <div style="margin-top:4px;color:var(--red);font-size:12px">⚠ 别名已存在（系统默认，不可覆盖）</div>
         </div>
-        <div><input class="input" style="height:36px" value="gpt-4o" /></div>
+        <div><input class="input" style="height:36px" value="gpt-5.4" /></div>
         <div><span class="badge-user">用户自定义</span></div>
         <div style="text-align:center">–</div>
         <div style="display:flex;gap:6px;justify-content:flex-end">
@@ -433,7 +433,7 @@ legacy-model,davinci-002,true,已弃用</pre>
       <div style="display:flex;justify-content:space-between;gap:12px;margin-bottom:6px">
         <code class="mono">fast</code>
         <span style="color:var(--muted)">→</span>
-        <code class="mono">gpt-4o-mini</code>
+        <code class="mono">gpt-5.4-mini</code>
       </div>
       <div class="muted" style="font-size:12px">来源：用户自定义 · 创建于 2026-05-20</div>
     </div>
@@ -456,7 +456,7 @@ legacy-model,davinci-002,true,已弃用</pre>
     <div class="alias-wrap">
       <div class="alias-row">
         <div class="alias-name"><code class="mono">fast</code></div>
-        <div class="muted">gpt-4o-mini</div>
+        <div class="muted">gpt-5.4-mini</div>
         <div><span class="badge-user">用户自定义</span></div>
         <div style="text-align:center">
           <span class="visibility-toggle on" title="可见" style="cursor:pointer">👁</span>
@@ -465,7 +465,7 @@ legacy-model,davinci-002,true,已弃用</pre>
       </div>
       <div class="alias-row">
         <div class="alias-name"><code class="mono">smart</code></div>
-        <div class="muted">claude-3-5-sonnet-20241022</div>
+        <div class="muted">claude-sonnet-4-6</div>
         <div><span class="badge-user">用户自定义</span></div>
         <div style="text-align:center">
           <span class="visibility-toggle on" title="可见" style="cursor:pointer">👁</span>
@@ -482,7 +482,7 @@ legacy-model,davinci-002,true,已弃用</pre>
     <div class="alias-wrap">
       <div class="alias-row hidden-row">
         <div class="alias-name"><code class="mono">legacy-model</code></div>
-        <div class="muted">davinci-002</div>
+        <div class="muted">gpt-5.4-nano</div>
         <div><span class="badge-user">用户自定义</span></div>
         <div style="text-align:center">
           <span class="visibility-toggle" title="已隐藏" style="cursor:pointer">–</span>
@@ -491,7 +491,7 @@ legacy-model,davinci-002,true,已弃用</pre>
       </div>
       <div class="alias-row hidden-row">
         <div class="alias-name"><code class="mono">old-instruct</code></div>
-        <div class="muted">gpt-3.5-turbo-instruct</div>
+        <div class="muted">gpt-5.4-mini</div>
         <div><span class="badge-user">用户自定义</span></div>
         <div style="text-align:center">
           <span class="visibility-toggle" title="已隐藏" style="cursor:pointer">–</span>
@@ -544,10 +544,10 @@ legacy-model,davinci-002,true,已弃用</pre>
       <div class="phone-top"></div>
       <div class="mobile-card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <div><b style="font-size:14px"><code class="mono">gpt-4</code></b> <span class="badge-system">系统</span></div>
+          <div><b style="font-size:14px"><code class="mono">gpt-latest</code></b> <span class="badge-system">系统</span></div>
           <span class="visibility-toggle on" style="width:24px;height:24px;font-size:11px">👁</span>
         </div>
-        <div class="muted" style="font-size:12px;margin-bottom:8px">→ gpt-4-turbo</div>
+        <div class="muted" style="font-size:12px;margin-bottom:8px">→ gpt-5.4</div>
         <div style="display:flex;gap:6px"><button class="btn ghost" style="font-size:12px">编辑</button></div>
       </div>
       <div class="mobile-card">
@@ -555,7 +555,7 @@ legacy-model,davinci-002,true,已弃用</pre>
           <div><b style="font-size:14px"><code class="mono">fast</code></b> <span class="badge-user">自定义</span></div>
           <span class="visibility-toggle on" style="width:24px;height:24px;font-size:11px">👁</span>
         </div>
-        <div class="muted" style="font-size:12px;margin-bottom:8px">→ gpt-4o-mini</div>
+        <div class="muted" style="font-size:12px;margin-bottom:8px">→ gpt-5.4-mini</div>
         <div style="display:flex;gap:6px"><button class="btn ghost" style="font-size:12px">编辑</button><button class="btn ghost danger" style="font-size:12px">删除</button></div>
       </div>
       <div class="mobile-card hidden-row">
@@ -563,7 +563,7 @@ legacy-model,davinci-002,true,已弃用</pre>
           <div><b style="font-size:14px;text-decoration:line-through"><code class="mono">legacy-model</code></b></div>
           <span class="visibility-toggle" style="width:24px;height:24px;font-size:11px">–</span>
         </div>
-        <div class="muted" style="font-size:12px;margin-bottom:8px;text-decoration:line-through">→ davinci-002</div>
+        <div class="muted" style="font-size:12px;margin-bottom:8px;text-decoration:line-through">→ gpt-5.4-nano</div>
         <div style="display:flex;gap:6px"><button class="btn ghost" style="font-size:12px">显示</button><button class="btn ghost danger" style="font-size:12px">删除</button></div>
       </div>
       <div style="display:flex;gap:8px;margin-top:12px">

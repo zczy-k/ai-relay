@@ -210,10 +210,10 @@ describe('iteration 4 health probe and usage report', () => {
     expect(body.reports).toHaveLength(1);
   });
 
-  it('configures Vercel Cron schedules for 30-minute probes and daily usage aggregation', async () => {
+  it('configures Vercel Cron schedules for daily probes and daily usage aggregation', async () => {
     const vercel = await import('../../vercel.json');
     expect(vercel.default.crons).toEqual(expect.arrayContaining([
-      { path: '/api/cron/probe', schedule: '*/30 * * * *' },
+      { path: '/api/cron/probe', schedule: '0 0 * * *' },
       { path: '/api/cron/usage', schedule: '5 0 * * *' },
     ]));
   });
