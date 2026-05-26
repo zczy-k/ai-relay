@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createMemoryMockKV, getManagedKeys, getManagedKeysVersion, setManagedKeys } from '../lib/admin/admin-config';
+import { __adminConfigCacheForTests, createMemoryMockKV, getManagedKeys, getManagedKeysVersion, setManagedKeys } from '../lib/admin/admin-config';
 import { __usageStorageCacheForTests, KVUsageStorage } from '../lib/usage/storage/kv-storage';
 import { createUsageEvent } from '../lib/usage';
 import { kvKeys } from '../lib/usage/storage/kv-keys';
@@ -30,6 +30,7 @@ describe('KV command optimization', () => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
     __usageStorageCacheForTests.clear();
+    __adminConfigCacheForTests.clear();
     installMockKV();
   });
 
@@ -165,6 +166,21 @@ describe('KV command optimization', () => {
       monthlyUsed: 0,
       monthlyLimit: 0,
     });
+  });
+
+  it('caches missing custom quota config to avoid repeated KV reads', async () => {
+    const kv = installMockKV();
+    vi.stubEnv('RELAY_DAILY_LIMIT', '1');
+    vi.stubEnv('RELAY_MONTHLY_LIMIT', '10');
+    const originalHgetall = kv.hgetall.bind(kv);
+    kv.hgetall = vi.fn((key: string) => originalHgetall(key));
+    const storage = new KVUsageStorage();
+
+    await storage.checkQuota(true);
+    await storage.checkQuota(true);
+
+    expect(kv.hgetall).toHaveBeenCalledTimes(1);
+    expect(kv.hgetall).toHaveBeenCalledWith('admin:quota');
   });
 
   it('reads provider error stats through a single pipeline', async () => {
