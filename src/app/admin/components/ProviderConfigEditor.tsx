@@ -32,6 +32,7 @@ interface ProviderConfigEditorProps {
   onDeleteKey: (providerId: string, hash: string) => Promise<void>;
   onTestKey: (providerId: string, hash: string, modelId?: string) => Promise<void>;
   onTestInputKey: (modelId?: string) => Promise<void>;
+  onTestAndAddKey: (modelId?: string) => Promise<void>;
   onSaveFallbacks: (newChain: string[]) => Promise<void>;
   onResetFallbacks: () => Promise<void>;
   setEditingCustomProvider: (val: any) => void;
@@ -62,6 +63,7 @@ export default function ProviderConfigEditor({
   onDeleteKey,
   onTestKey,
   onTestInputKey,
+  onTestAndAddKey,
   onSaveFallbacks,
   onResetFallbacks,
   setEditingCustomProvider,
@@ -329,6 +331,26 @@ export default function ProviderConfigEditor({
                 {testingInput ? t.btnTestingKey : t.btnTestKey}
               </button>
               <button
+                onClick={() => onTestAndAddKey(selectedInputModel)}
+                disabled={operationLoading || testingInput || !newKeyInput.trim() || !canTestInputKey}
+                style={{
+                  padding: '0.6rem 1rem',
+                  borderRadius: '6px',
+                  border: 'none',
+                  backgroundColor: '#7c3aed',
+                  color: 'white',
+                  fontWeight: 'bold',
+                  fontSize: '0.9rem',
+                  cursor: operationLoading || testingInput || !newKeyInput.trim() || !canTestInputKey ? 'not-allowed' : 'pointer',
+                  opacity: operationLoading || testingInput || !newKeyInput.trim() || !canTestInputKey ? 0.5 : 1,
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => { if (!e.currentTarget.disabled) e.currentTarget.style.backgroundColor = '#6d28d9'; }}
+                onMouseLeave={(e) => { if (!e.currentTarget.disabled) e.currentTarget.style.backgroundColor = '#7c3aed'; }}
+              >
+                {testingInput ? t.btnTestingKey : t.btnTestAndAddKey}
+              </button>
+              <button
                 onClick={onAddKey}
                 disabled={operationLoading || !newKeyInput.trim()}
                 style={{
@@ -525,6 +547,8 @@ export default function ProviderConfigEditor({
                         alignItems: 'center',
                         padding: '0.6rem 0.8rem',
                         borderBottom: idx < activeFallbacks.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                        gap: '0.5rem',
+                        flexWrap: 'wrap',
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: 0 }}>
@@ -541,7 +565,7 @@ export default function ProviderConfigEditor({
                           justifyContent: 'center',
                           flexShrink: 0,
                         }}>{idx + 1}</span>
-                        <span style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#f3f4f6', flexShrink: 0 }}>{fbName}</span>
+                        <span style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#f3f4f6', flexShrink: 0, maxWidth: '64px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fbName}</span>
                         
                         {/* Model selector */}
                         <select
@@ -561,8 +585,9 @@ export default function ProviderConfigEditor({
                             color: fbModel ? '#60a5fa' : '#9ca3af',
                             fontSize: '0.75rem',
                             outline: 'none',
-                            maxWidth: '180px',
+                            maxWidth: '140px',
                             flexShrink: 1,
+                            minWidth: '60px',
                             cursor: 'pointer',
                           }}
                         >

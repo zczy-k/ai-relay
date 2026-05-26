@@ -286,7 +286,7 @@ export default function TokenTrendChart({ apiKey, lang = 'zh' }: TokenTrendChart
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
           {/* Provider filter */}
-          <div style={{ display: 'flex', gap: '0.25rem' }}>
+          <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
             {availableProviders.map((p) => (
               <button
                 key={p}
