@@ -12,6 +12,14 @@
 
 ### Added
 - **Responses API 支持**：新增 `/v1/responses` 端点，兼容 OpenAI Responses API，支持流式和非流式请求，复用现有 auth、rate limit 和 usage tracking 机制。(#9, #10)
+- **错误体验系统**：新增 Toast 通知、ErrorBoundary 全局捕获、ErrorDetailPanel 详情展示，统一前端错误处理和用户反馈。
+- **移动端 Admin 适配**：新增 BottomNav 底部导航栏、BottomSheet 底部弹窗，Admin 后台移动端响应式布局优化。
+- **用量批量写入优化**：新增 Ring Buffer + Periodic Flush 机制，减少 KV 写入频率，提升高并发场景下的用量统计性能。
+
+### Fixed
+- **用量统计漏记**：修复批量写入模式下用量计数偏少的问题。
+- **流式响应正确性**：修复流式请求中 chunk 处理的边界问题。
+- **UI 布局问题**：修复多处移动端布局溢出和错位。
 
 ## [2.3.2] - 2026-05-26
 
