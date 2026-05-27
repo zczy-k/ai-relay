@@ -24,15 +24,24 @@ function keyVersionCheckTtlMs(): number {
 }
 
 /**
- * Hash a key to a short identifier (for KV storage / logging).
- * Uses djb2 — fast, no crypto dependency.
+ * Hash a key to a 16-char hex identifier (for KV storage / logging).
+ * Uses dual FNV-1a (two 32-bit hashes with different offsets) for 64-bit output.
+ * Synchronous and Edge Runtime compatible — no Node.js crypto dependency.
  */
 export function hashKey(key: string): string {
-  let hash = 5381;
+  // FNV-1a with standard offset
+  let h1 = 0x811c9dc5;
   for (let i = 0; i < key.length; i++) {
-    hash = ((hash << 5) + hash + key.charCodeAt(i)) >>> 0;
+    h1 ^= key.charCodeAt(i);
+    h1 = Math.imul(h1, 0x01000193);
   }
-  return hash.toString(16).padStart(8, '0');
+  // FNV-1a with alternate offset for second 32 bits
+  let h2 = 0x050c5d1f;
+  for (let i = 0; i < key.length; i++) {
+    h2 ^= key.charCodeAt(i);
+    h2 = Math.imul(h2, 0x01000193);
+  }
+  return ((h1 >>> 0).toString(16).padStart(8, '0') + (h2 >>> 0).toString(16).padStart(8, '0'));
 }
 
 /**

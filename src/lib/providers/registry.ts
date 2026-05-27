@@ -9,39 +9,6 @@ import type { ProviderConfig } from './types';
  * To add a new provider, just add an entry here.
  */
 export const PROVIDERS: Record<string, ProviderConfig> = {
-  // ⚠️ lpgpt 排在 openai 前面，gpt-5.x 走 lpgpt，其他 OpenAI 前缀走 OpenAI
-  lpgpt: {
-    name: 'lpgpt',
-    displayName: 'LPGPT (GPT-5)',
-    baseUrl: 'https://lpgpt.us/v1',
-    modelPrefixes: ['gpt-5.'],
-    headerFormat: 'openai',
-    envKeyField: 'LPGPT_KEYS',
-    envBaseUrlField: 'LPGPT_BASE_URL',
-    models: [
-      { id: 'gpt-5.3', displayName: 'GPT-5.3', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsVision: true, supportsTools: true },
-      { id: 'gpt-5.3-codex', displayName: 'GPT-5.3 Codex', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsVision: true, supportsTools: true },
-      { id: 'gpt-5.4', displayName: 'GPT-5.4', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsVision: true, supportsTools: true },
-      { id: 'gpt-5.5', displayName: 'GPT-5.5', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsVision: true, supportsTools: true },
-    ],
-  },
-  gw2_oops_asia: {
-    name: 'gw2_oops_asia',
-    displayName: 'GW2 Oops Asia',
-    baseUrl: 'https://gw2.oops.asia/v1',
-    modelPrefixes: ['gpt-5.5', 'gpt-5.4', 'gpt-5.3-codex', 'gpt-5.3'],
-    headerFormat: 'openai',
-    envKeyField: 'GW2_OOPS_ASIA_KEYS',
-    envBaseUrlField: 'GW2_OOPS_ASIA_BASE_URL',
-    models: [
-      { id: 'gpt-5.5', displayName: 'GPT-5.5', contextWindow: 1000000, maxOutput: 128000, supportsStream: true, supportsVision: true, supportsTools: true },
-      { id: 'gpt-5.4', displayName: 'GPT-5.4', contextWindow: 1000000, maxOutput: 128000, supportsStream: true, supportsVision: true, supportsTools: true },
-      { id: 'gpt-5.4-mini', displayName: 'GPT-5.4 Mini', contextWindow: 400000, maxOutput: 128000, supportsStream: true, supportsVision: true, supportsTools: true },
-      { id: 'gpt-5.4-nano', displayName: 'GPT-5.4 Nano', contextWindow: 400000, maxOutput: 128000, supportsStream: true, supportsVision: true, supportsTools: true },
-      { id: 'gpt-5.3-codex', displayName: 'GPT-5.3 Codex', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsVision: true, supportsTools: true },
-      { id: 'gpt-5.3', displayName: 'GPT-5.3', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsVision: true, supportsTools: true },
-    ],
-  },
   openai: {
     name: 'openai',
     displayName: 'OpenAI',
@@ -96,7 +63,6 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
     modelMapping: {
       'mimo-v2.5-pro-coding': 'mimo-v2.5-pro',
       'mimo-v2.5-pro-sgp': 'mimo-v2.5-pro',
-      'mimo-v2.5-flash-sgp': 'mimo-v2.5-flash',
       'mimo-v2.5-coding': 'mimo-v2.5',
       'mimo-v2.5-sgp': 'mimo-v2.5',
     },
@@ -109,19 +75,17 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
     name: 'xiaomi_sgp_coding',
     displayName: 'MiMo SGP (Coding Plan)',
     baseUrl: 'https://token-plan-sgp.xiaomimimo.com/v1',
-    modelPrefixes: ['mimo-v2.5-pro-sgp', 'mimo-v2.5-flash-sgp', 'mimo-v2.5-sgp'],
+    modelPrefixes: ['mimo-v2.5-pro-sgp', 'mimo-v2.5-sgp'],
     headerFormat: 'azure',
     envKeyField: 'XIAOMIMIMO_SGP_CODING_KEYS',
     envBaseUrlField: 'XIAOMIMIMO_SGP_CODING_BASE_URL',
     modelMapping: {
       'mimo-v2.5-pro-sgp': 'mimo-v2.5-pro',
-      'mimo-v2.5-flash-sgp': 'mimo-v2.5-flash',
       'mimo-v2.5-sgp': 'mimo-v2.5',
     },
     models: [
       { id: 'mimo-v2.5-sgp', displayName: 'MiMo v2.5 (SGP Coding)', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsVision: true, supportsTools: true },
       { id: 'mimo-v2.5-pro-sgp', displayName: 'MiMo v2.5 Pro (SGP Coding)', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsVision: true, supportsTools: true },
-      { id: 'mimo-v2.5-flash-sgp', displayName: 'MiMo v2.5 Flash (SGP Coding)', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsVision: true },
     ],
   },
   xiaomi_coding: {
@@ -139,19 +103,6 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
     models: [
       { id: 'mimo-v2.5-coding', displayName: 'MiMo v2.5 (Coding)', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsVision: true, supportsTools: true },
       { id: 'mimo-v2.5-pro-coding', displayName: 'MiMo v2.5 Pro (Coding)', contextWindow: 128000, maxOutput: 16384, supportsStream: true, supportsVision: true, supportsTools: true },
-    ],
-  },
-  xiaomi_tudo: {
-    name: 'xiaomi_tudo',
-    displayName: 'xiaomi_tudo',
-    baseUrl: 'https://test.404888.xyz/v1',
-    modelPrefixes: ['mimo-v2.5-pro'],
-    headerFormat: 'openai',
-    envKeyField: 'XIAOMI_TUDO_KEYS',
-    envBaseUrlField: 'XIAOMI_TUDO_BASE_URL',
-    models: [
-      { id: 'mimo-v2.5', displayName: 'MiMo-v2.5', contextWindow: 1048576, maxOutput: 32000, supportsStream: true, supportsVision: true },
-      { id: 'mimo-v2.5-pro', displayName: 'MiMo-v2.5-Pro', contextWindow: 1048576, maxOutput: 32000, supportsStream: true, supportsVision: true }
     ],
   },
 };

@@ -16,6 +16,7 @@ import {
   backoffSleep,
 } from './rate-limiter';
 import { withConcurrency } from './concurrency';
+import { smartRoute, recordProviderResult } from '../smart-routing';
 
 const usageStorage = new KVUsageStorage();
 
@@ -63,17 +64,33 @@ export async function relayRequest(
     );
   }
 
+  // Smart routing: check if a better provider is available based on routing strategy
+  let effectiveProvider = provider;
+  try {
+    const routingDecision = await smartRoute(provider.name);
+    if (routingDecision.provider !== provider.name) {
+      const allProviders = await getAllProviders();
+      const reroutedProvider = allProviders[routingDecision.provider];
+      if (reroutedProvider) {
+        console.log(`[smart-route] Rerouting ${provider.displayName} → ${reroutedProvider.displayName} (${routingDecision.reason})`);
+        effectiveProvider = reroutedProvider;
+      }
+    }
+  } catch {
+    // Smart routing is non-blocking; fall through to original provider
+  }
+
   let primaryResult: { result: RelayResult | null; lastError: Error | null } = { result: null, lastError: null };
 
   // Fetch fallback chain early to determine if we can fall back on rate limit/circuit breaker open
   const { getFallbackChain } = await import('../admin/admin-config');
   const fallbackNames = await getFallbackChain(
-    provider.name,
-    provider.fallbackProviders || provider.fallbackProvider
+    effectiveProvider.name,
+    effectiveProvider.fallbackProviders || effectiveProvider.fallbackProvider
   );
 
   // Pre-flight: check rate limiter (token bucket + circuit breaker)
-  const rateLimitCheck = checkRateLimit(provider.name);
+  const rateLimitCheck = checkRateLimit(effectiveProvider.name);
 
   if (!rateLimitCheck.allowed) {
     // If no fallbacks are configured, fail immediately with 429
@@ -87,29 +104,29 @@ export async function relayRequest(
     primaryResult.lastError = new Error(rateLimitCheck.reason || 'Rate limit exceeded');
   } else {
     // Select an API key
-    const apiKey = await selectKey(provider);
+    const apiKey = await selectKey(effectiveProvider);
     if (apiKey) {
       // Retry with key rotation + exponential backoff
-      const pool = await getKeyPool(provider);
+      const pool = await getKeyPool(effectiveProvider);
       const maxRetries = Math.min(pool.keys.length, 3);
 
       // Try primary provider with retries (with concurrency control)
       primaryResult = await withConcurrency(
-        () => tryProviderWithRetries(provider, body, apiKey, maxRetries, apiType)
+        () => tryProviderWithRetries(effectiveProvider, body, apiKey, maxRetries, apiType)
       );
       if (primaryResult.result) {
         return primaryResult.result;
       }
     } else {
-      primaryResult.lastError = new Error(`No API keys configured for provider: ${provider.displayName}`);
+      primaryResult.lastError = new Error(`No API keys configured for provider: ${effectiveProvider.displayName}`);
     }
   }
 
   const errors: { provider: string; error: string }[] = [
-    { provider: provider.displayName, error: primaryResult.lastError?.message || 'unknown error' },
+    { provider: effectiveProvider.displayName, error: primaryResult.lastError?.message || 'unknown error' },
   ];
 
-  const attemptedProviders = new Set<string>([provider.name]);
+  const attemptedProviders = new Set<string>([effectiveProvider.name]);
 
   for (const fbEntry of fallbackNames) {
     // Parse "provider:model" format — model is optional
@@ -254,6 +271,7 @@ async function tryProviderWithRetries(
         await record429(provider.name);
         await markCooldown(currentKey);
         await recordError(provider.name, currentKey.hash, 429, 'Rate limited by upstream');
+        recordProviderResult(provider.name, false, latencyMs, 429);
         lastError = new Error('Rate limited by upstream');
         const nextKey = await selectKey(provider);
         if (nextKey && nextKey.hash !== currentKey.hash) {
@@ -267,6 +285,7 @@ async function tryProviderWithRetries(
       if (upstreamResponse.status === 401 || upstreamResponse.status === 403) {
         await markCooldown(currentKey);
         await recordError(provider.name, currentKey.hash, upstreamResponse.status, 'Auth failed — key invalid or expired');
+        recordProviderResult(provider.name, false, latencyMs, upstreamResponse.status);
         lastError = new Error('Auth failed — key invalid or expired');
         const nextKey = await selectKey(provider);
         if (nextKey && nextKey.hash !== currentKey.hash) {
@@ -280,6 +299,7 @@ async function tryProviderWithRetries(
       if (upstreamResponse.status >= 500) {
         await markCooldown(currentKey);
         await recordError(provider.name, currentKey.hash, upstreamResponse.status, 'Upstream server error');
+        recordProviderResult(provider.name, false, latencyMs, upstreamResponse.status);
         lastError = new Error(`Upstream server error (HTTP ${upstreamResponse.status})`);
         const nextKey = await selectKey(provider);
         if (nextKey && nextKey.hash !== currentKey.hash) {
@@ -292,12 +312,16 @@ async function tryProviderWithRetries(
       // Success → record in rate limiter
       await recordSuccess(provider.name);
 
+      // Record latency for smart routing
+      recordProviderResult(provider.name, true, latencyMs, upstreamResponse.status);
+
       // NOTE: Usage tracking is done in the route handler, not here.
       // This avoids double-counting for non-streaming responses.
 
       return { result: { response: upstreamResponse, provider, apiKey: currentKey }, lastError };
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
+      recordProviderResult(provider.name, false, Date.now() - startTime);
       if (currentKey) {
         await markCooldown(currentKey);
         const nextKey = await selectKey(provider);

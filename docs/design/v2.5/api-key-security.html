@@ -200,6 +200,10 @@ body {
 .log-detail { color: var(--text); flex: 1; }
 .log-actor { color: var(--dim); font-size: 12px; min-width: 60px; text-align: right; }
 
+/* ===== Sparkline ===== */
+.sparkline { display: inline-block; vertical-align: middle; }
+.sparkline polyline { fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+
 /* ===== Responsive ===== */
 @media (max-width: 768px) {
   .stats-grid { grid-template-columns: 1fr; }
@@ -454,4 +458,176 @@ body {
   </table>
 </div>
 
-<!-- PLACEHOLDER_SECTION_3 -->
+<!-- ===== Section 3: Rotation Modal ===== -->
+<div class="section-title">3 · 一键轮换流程（Modal）</div>
+<div style="position:relative;background:rgba(0,0,0,.4);border-radius:var(--radius-lg);padding:40px 20px;min-height:400px;">
+  <!-- Backdrop simulation -->
+  <div style="filter:blur(2px);opacity:.15;pointer-events:none;">
+    <div style="height:60px;background:var(--panel);border-radius:var(--radius-md);margin-bottom:12px;"></div>
+    <div style="height:200px;background:var(--panel);border-radius:var(--radius-md);"></div>
+  </div>
+  <!-- Modal -->
+  <div class="modal-overlay" style="position:relative;inset:auto;background:none;">
+    <div class="modal">
+      <div class="modal-title">🔄 轮换 API Key</div>
+      <div class="modal-sub">OpenAI · key-2 · <span class="key-mask">sk-****efgh</span></div>
+
+      <!-- Step indicator -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:24px;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="width:24px;height:24px;border-radius:50%;background:var(--gradient-primary);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;">1</span>
+          <span style="font-size:12px;color:var(--text);">输入新 Key</span>
+        </div>
+        <span style="flex:1;height:1px;background:var(--line);"></span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="width:24px;height:24px;border-radius:50%;border:1.5px solid var(--line);color:var(--dim);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;">2</span>
+          <span style="font-size:12px;color:var(--dim);">确认切换</span>
+        </div>
+        <span style="flex:1;height:1px;background:var(--line);"></span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="width:24px;height:24px;border-radius:50%;border:1.5px solid var(--line);color:var(--dim);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;">3</span>
+          <span style="font-size:12px;color:var(--dim);">完成</span>
+        </div>
+      </div>
+
+      <!-- Step 1 Content: Input new key -->
+      <div style="margin-bottom:20px;">
+        <label class="input-label">新 API Key</label>
+        <div style="position:relative;">
+          <input type="password" class="input-field" value="sk-proj-xxxxxxxxxxxxxxxxxxxx" style="padding-right:80px;" readonly />
+          <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--blue);cursor:pointer;">显示</span>
+        </div>
+      </div>
+
+      <!-- Test connection -->
+      <div style="background:rgba(52,211,153,.06);border:1px solid rgba(52,211,153,.2);border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:20px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="font-size:14px;">✅</span>
+          <span style="font-size:13px;font-weight:600;color:var(--green);">连接测试通过</span>
+        </div>
+        <div style="display:flex;gap:20px;font-size:12px;color:var(--muted);">
+          <span>延迟 <strong style="color:var(--text);">142ms</strong></span>
+          <span>模型 <strong style="color:var(--text);">GPT-4o, GPT-4o-mini, o1</strong></span>
+          <span>权限 <strong style="color:var(--text);">完整访问</strong></span>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button class="btn-ghost">取消</button>
+        <button class="btn-primary">下一步 →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Section 4: Audit Log ===== -->
+<div class="section-title">4 · 轮换审计日志</div>
+<div class="panel">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+    <div style="display:flex;gap:8px;">
+      <span style="padding:4px 12px;border-radius:var(--radius-pill);background:var(--gradient-active);font-size:11px;color:var(--text);cursor:pointer;">全部</span>
+      <span style="padding:4px 12px;border-radius:var(--radius-pill);border:1px solid var(--line);font-size:11px;color:var(--dim);cursor:pointer;">轮换</span>
+      <span style="padding:4px 12px;border-radius:var(--radius-pill);border:1px solid var(--line);font-size:11px;color:var(--dim);cursor:pointer;">新增</span>
+      <span style="padding:4px 12px;border-radius:var(--radius-pill);border:1px solid var(--line);font-size:11px;color:var(--dim);cursor:pointer;">告警</span>
+    </div>
+    <span style="font-size:11px;color:var(--dim);">最近 30 天</span>
+  </div>
+
+  <!-- Log entries -->
+  <div class="log-entry">
+    <span class="log-time">2026-05-27 02:45</span>
+    <span class="log-type log-type-alert">告警</span>
+    <span class="log-detail">OpenAI key-2 检测到 401 错误率 12.4%，建议轮换</span>
+    <span class="log-actor">系统</span>
+  </div>
+  <div class="log-entry">
+    <span class="log-time">2026-05-26 18:30</span>
+    <span class="log-type log-type-rotate">轮换</span>
+    <span class="log-detail">Deepseek key-1 → key-2 渐进切换完成</span>
+    <span class="log-actor">像素姐</span>
+  </div>
+  <div class="log-entry">
+    <span class="log-time">2026-05-25 14:12</span>
+    <span class="log-type log-type-add">新增</span>
+    <span class="log-detail">新增 Google Gemini key-1，已加密存储</span>
+    <span class="log-actor">Boss</span>
+  </div>
+  <div class="log-entry">
+    <span class="log-time">2026-05-24 09:05</span>
+    <span class="log-type log-type-rotate">轮换</span>
+    <span class="log-detail">OpenAI key-1 立即切换，旧 Key 保留备用</span>
+    <span class="log-actor">Boss</span>
+  </div>
+  <div class="log-entry">
+    <span class="log-time">2026-05-23 22:18</span>
+    <span class="log-type log-type-pause">暂停</span>
+    <span class="log-detail">Anthropic key-2 因限流暂停，自动切换到 key-1</span>
+    <span class="log-actor">系统</span>
+  </div>
+  <div class="log-entry" style="border-bottom:none;">
+    <span class="log-time">2026-05-22 16:40</span>
+    <span class="log-type log-type-alert">告警</span>
+    <span class="log-detail">OpenAI key-2 连续 3 次超时，已自动降级</span>
+    <span class="log-actor">系统</span>
+  </div>
+</div>
+
+<!-- ===== Section 5: Mobile Preview ===== -->
+<div class="section-title">5 · 移动端适配预览</div>
+<div style="max-width:375px;margin:0 auto;background:rgba(0,0,0,.3);border:1px solid var(--line);border-radius:var(--radius-lg);padding:16px;min-height:600px;">
+  <div style="text-align:center;margin-bottom:16px;">
+    <span style="font-size:11px;color:var(--dim);background:var(--panel);padding:3px 10px;border-radius:var(--radius-pill);">📱 375px · iPhone SE</span>
+  </div>
+
+  <!-- Mobile stats cards - stacked -->
+  <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
+    <div style="background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-md);padding:14px;display:flex;align-items:center;gap:12px;">
+      <span style="font-size:22px;">🔒</span>
+      <div style="flex:1;">
+        <div style="font-size:18px;font-weight:800;color:var(--green);">7/7 已加密</div>
+        <div style="font-size:11px;color:var(--muted);">AES-256-GCM</div>
+      </div>
+    </div>
+    <div style="background:var(--panel);border:1px solid rgba(248,113,113,.2);border-radius:var(--radius-md);padding:14px;display:flex;align-items:center;gap:12px;">
+      <span style="font-size:22px;">🔄</span>
+      <div style="flex:1;">
+        <div style="font-size:18px;font-weight:800;color:var(--yellow);">2 需轮换</div>
+        <div style="font-size:11px;color:var(--red);">OpenAI key-2 · 401 率 12%</div>
+      </div>
+    </div>
+    <div style="background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-md);padding:14px;display:flex;align-items:center;gap:12px;">
+      <span style="font-size:22px;">📊</span>
+      <div style="flex:1;">
+        <div style="font-size:18px;font-weight:800;">12,847</div>
+        <div style="font-size:11px;color:var(--muted);">今日请求 · 错误率 0.8%</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile key card -->
+  <div style="background:var(--panel);border:1px solid rgba(248,113,113,.3);border-left:3px solid var(--red);border-radius:var(--radius-md);padding:14px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:14px;">🔴</span>
+        <div>
+          <div style="font-weight:600;font-size:14px;">OpenAI · key-2</div>
+          <span class="key-mask" style="font-size:11px;">sk-****efgh</span>
+        </div>
+      </div>
+      <span class="status-badge status-critical" style="font-size:10px;padding:2px 8px;"><span class="dot"></span>需轮换</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:10px;">
+      <span>使用量 10.6k/12k</span>
+      <span style="color:var(--red);font-weight:700;">错误率 12.4%</span>
+    </div>
+    <button class="btn-danger" style="width:100%;text-align:center;padding:10px;">🔄 立即轮换</button>
+  </div>
+
+  <div style="margin-top:12px;font-size:10px;color:var(--dim);text-align:center;">
+    移动端概览卡片垂直堆叠 · Key 卡片主信息前置 · 轮换全屏 Modal
+  </div>
+</div>
+
+</div>
+</body>
+</html>

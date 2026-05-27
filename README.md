@@ -16,7 +16,7 @@
 
 <p><strong><a href="https://vercel.com/new/clone?repository-url=https://github.com/MoyuFamily/ai-relay&env=RELAY_API_KEY,RELAY_ADMIN_KEY,RELAY_SIGNING_SECRET&envDescription=API%20authentication%20keys%20(required%20for%20security)&envLink=https://github.com/MoyuFamily/ai-relay#environment-variables">👉 立即一键部署</a></strong> · <a href="#-一键部署2-分钟上线你的-ai-api-网关">查看部署步骤</a></p>
 
-[![Version](https://img.shields.io/badge/Version-2.4.0-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-2.5.0-green.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org/)
 [![Edge Runtime](https://img.shields.io/badge/Edge_Runtime-⚡-black?logo=vercel)](https://vercel.com/docs/functions/edge-functions)
@@ -78,6 +78,8 @@
 | **Webhook 通知** | 企微 / 飞书 / 钉钉 / Slack，日报 + 超限告警 |
 | **临时 API Key** | HMAC-SHA256 无状态签名，自动过期 |
 | **虚拟模型映射** | 将虚拟模型名路由到真实 Provider |
+| **智能路由** | 延迟优先 / 成本优先 / 可用性优先，自动选择最优 Provider |
+| **API Key 安全管理** | Key 遮掩展示、健康监控、轮换告警、审计日志 |
 
 ## 🚀 一键部署：2 分钟上线你的 AI API 网关
 
@@ -235,10 +237,12 @@ curl -X POST https://你的项目.vercel.app/v1/responses \
 | `CLAUDE_KEYS` | Anthropic API Keys | ⬜ |
 | `DEEPSEEK_KEYS` | DeepSeek API Keys | ⬜ |
 | `XIAOMI_KEYS` | Xiaomi API Keys | ⬜ |
+| `XIAOMIMIMO_SGP_CODING_KEYS` | MiMo SGP Coding Plan API Keys | ⬜ |
+| `XIAOMI_CODING_KEYS` | MiMo Coding Plan API Keys | ⬜ |
 | `RELAY_KV_USAGE_SAMPLE_RATE` | 用量统计写入采样率，`1` 为精确统计，`0.1` 表示约 10% 写入并按比例估算 | ⬜ |
 
 > [!NOTE]
-> Provider 密钥建议通过 Admin 后台配置（存储在 Upstash Redis 中），而非写入环境变量。
+> Provider 密钥建议通过 Admin 后台配置（存储在 Upstash Redis 中），而非写入环境变量。后台添加/测试密钥时支持粘贴原始 API Key 或 Base64 编码后的 Key，系统会在保存和测试前自动解码。
 
 ### 支持的 Provider
 
@@ -247,7 +251,9 @@ curl -X POST https://你的项目.vercel.app/v1/responses \
 | OpenAI | gpt-5.4, gpt-latest, gpt-5.4-mini | ✅ 内置 |
 | Anthropic (Claude) | claude-sonnet-4-6, claude-opus-4-7 | ✅ 内置 |
 | DeepSeek | deepseek-v4-flash, deepseek-v4-pro | ✅ 内置 |
-| Xiaomi (MiMo) | mimo-7b | ✅ 内置 |
+| MiMo (API Key) | mimo-v2.5, mimo-v2.5-pro | ✅ 内置 |
+| MiMo SGP (Coding Plan) | mimo-v2.5-sgp, mimo-v2.5-pro-sgp | ✅ 内置 |
+| MiMo (Coding Plan) | mimo-v2.5-coding, mimo-v2.5-pro-coding | ✅ 内置 |
 | 自定义 | 任意 OpenAI 兼容 API | ✅ 可配置 |
 
 ## 🏗️ 架构概览

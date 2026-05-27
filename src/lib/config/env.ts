@@ -15,21 +15,17 @@
  *   OPENAI_KEYS                — Comma-separated OpenAI API keys
  *   CLAUDE_KEYS                — Comma-separated Anthropic API keys
  *   DEEPSEEK_KEYS              — Comma-separated DeepSeek API keys
- *   XIAOMIMIMO_SGP_KEYS        — Comma-separated Xiaomi MiMo SGP API keys
  *   XIAOMIMIMO_SGP_CODING_KEYS — Comma-separated Xiaomi MiMo SGP Coding API keys
  *   XIAOMI_KEYS                — Comma-separated Xiaomi MiMo CN API keys (legacy compat)
  *   XIAOMI_CODING_KEYS         — Comma-separated Xiaomi MiMo CN Coding API keys
- *   XIAOMI_TUDO_KEYS           — Comma-separated xiaomi_tudo API keys
  *
  * [Provider Base URLs] (optional — override defaults)
  *   OPENAI_BASE_URL            — Custom OpenAI API base URL
  *   CLAUDE_BASE_URL            — Custom Anthropic API base URL
  *   DEEPSEEK_BASE_URL          — Custom DeepSeek API base URL
- *   XIAOMIMIMO_SGP_BASE_URL    — Custom Xiaomi MiMo SGP API base URL
  *   XIAOMIMIMO_SGP_CODING_BASE_URL — Custom Xiaomi MiMo SGP Coding API base URL
  *   XIAOMI_BASE_URL            — Custom Xiaomi MiMo CN API base URL
  *   XIAOMI_CODING_BASE_URL     — Custom Xiaomi MiMo CN Coding API base URL
- *   XIAOMI_TUDO_BASE_URL       — Custom xiaomi_tudo API base URL
  *
  * [Vercel KV] (optional — graceful degradation if missing)
  *   KV_REST_API_URL      — Vercel KV REST API URL
@@ -104,7 +100,6 @@ export const PROVIDER_ENV_MAP: Record<string, { keyField: string; baseUrlField: 
   xiaomi_sgp_coding: { keyField: 'XIAOMIMIMO_SGP_CODING_KEYS', baseUrlField: 'XIAOMIMIMO_SGP_CODING_BASE_URL' },
   xiaomi: { keyField: 'XIAOMI_KEYS', baseUrlField: 'XIAOMI_BASE_URL' },
   xiaomi_coding: { keyField: 'XIAOMI_CODING_KEYS', baseUrlField: 'XIAOMI_CODING_BASE_URL' },
-  xiaomi_tudo: { keyField: 'XIAOMI_TUDO_KEYS', baseUrlField: 'XIAOMI_TUDO_BASE_URL' },
 };
 
 export function getProviderEnv(providerName: string): ProviderEnvConfig | null {

@@ -197,15 +197,6 @@ export async function resolveFallbackModel(originalModel: string, targetProvider
       return 'deepseek-v4-flash';
 
     case 'xiaomi_sgp_coding':
-      // SGP has both mimo-v2.5-pro-sgp and mimo-v2.5-flash-sgp
-      if (
-        lowerModel.includes('mini') ||
-        lowerModel.includes('haiku') ||
-        lowerModel.includes('flash') ||
-        lowerModel.includes('3.5-turbo')
-      ) {
-        return 'mimo-v2.5-flash-sgp';
-      }
       if (lowerModel.includes('mimo-v2.5') && !lowerModel.includes('pro')) {
         return 'mimo-v2.5-sgp';
       }
@@ -222,12 +213,6 @@ export async function resolveFallbackModel(originalModel: string, targetProvider
         return 'mimo-v2.5-coding';
       }
       return 'mimo-v2.5-pro-coding';
-
-    case 'xiaomi_tudo':
-      if (lowerModel.includes('mimo-v2.5') && !lowerModel.includes('pro')) {
-        return 'mimo-v2.5';
-      }
-      return 'mimo-v2.5-pro';
 
     case 'openai':
       if (
@@ -258,9 +243,6 @@ export async function resolveFallbackModel(originalModel: string, targetProvider
         return 'claude-haiku-4-5-20251001';
       }
       return 'claude-sonnet-4-6';
-
-    case 'lpgpt':
-      return 'gpt-5.4';
 
     default:
       // Fallback: use the first model ID in the provider's model list if available

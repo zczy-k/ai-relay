@@ -2,22 +2,22 @@ import { describe, it, expect } from 'vitest';
 import { resolveProvider, resolveFallbackModel, resolveUpstreamModel } from '../lib/providers/resolver';
 
 describe('GPT provider resolution tests', () => {
-  it('should route current GPT models to gw2 and other OpenAI GPT models to OpenAI', async () => {
+  it('should route GPT models to OpenAI', async () => {
     const gpt55Provider = await resolveProvider('gpt-5.5');
     expect(gpt55Provider).not.toBeNull();
-    expect(gpt55Provider?.name).toBe('gw2_oops_asia');
+    expect(gpt55Provider?.name).toBe('openai');
 
     const gpt54Provider = await resolveProvider('gpt-5.4');
     expect(gpt54Provider).not.toBeNull();
-    expect(gpt54Provider?.name).toBe('gw2_oops_asia');
+    expect(gpt54Provider?.name).toBe('openai');
 
     const gpt54MiniProvider = await resolveProvider('gpt-5.4-mini');
     expect(gpt54MiniProvider).not.toBeNull();
-    expect(gpt54MiniProvider?.name).toBe('gw2_oops_asia');
+    expect(gpt54MiniProvider?.name).toBe('openai');
 
     const gpt53CodexProvider = await resolveProvider('gpt-5.3-codex');
     expect(gpt53CodexProvider).not.toBeNull();
-    expect(gpt53CodexProvider?.name).toBe('gw2_oops_asia');
+    expect(gpt53CodexProvider?.name).toBe('openai');
 
     const otherGptProvider = await resolveProvider('gpt-6-preview');
     expect(otherGptProvider).not.toBeNull();
@@ -66,9 +66,6 @@ describe('mimo-v2.5 provider resolution and mapping tests', () => {
     const codingFallback = await resolveFallbackModel('mimo-v2.5', 'xiaomi_coding');
     expect(codingFallback).toBe('mimo-v2.5-coding');
 
-    // Fallback to xiaomi_tudo with base mimo-v2.5 should resolve to mimo-v2.5
-    const tudoFallback = await resolveFallbackModel('mimo-v2.5', 'xiaomi_tudo');
-    expect(tudoFallback).toBe('mimo-v2.5');
   });
 
   it('should resolve correct fallback model for pro model variants', async () => {
@@ -84,29 +81,25 @@ describe('mimo-v2.5 provider resolution and mapping tests', () => {
     const codingFallback = await resolveFallbackModel('mimo-v2.5-pro', 'xiaomi_coding');
     expect(codingFallback).toBe('mimo-v2.5-pro-coding');
 
-    // Fallback to xiaomi_tudo with mimo-v2.5-pro should resolve to mimo-v2.5-pro
-    const tudoFallback = await resolveFallbackModel('mimo-v2.5-pro', 'xiaomi_tudo');
-    expect(tudoFallback).toBe('mimo-v2.5-pro');
   });
 
   it('should support vision for all mimo-v2.5 and pro variants', async () => {
     const xiaomiProvider = await resolveProvider('mimo-v2.5');
     const sgpProvider = await resolveProvider('mimo-v2.5-sgp');
     const codingProvider = await resolveProvider('mimo-v2.5-coding');
-    const tudoProvider = await resolveProvider('mimo-v2.5-pro'); // resolves to xiaomi_tudo because of length
+    const proProvider = await resolveProvider('mimo-v2.5-pro');
 
     expect(xiaomiProvider?.models?.find(m => m.id === 'mimo-v2.5')?.supportsVision).toBe(true);
     expect(xiaomiProvider?.models?.find(m => m.id === 'mimo-v2.5-pro')?.supportsVision).toBe(true);
 
     expect(sgpProvider?.models?.find(m => m.id === 'mimo-v2.5-sgp')?.supportsVision).toBe(true);
     expect(sgpProvider?.models?.find(m => m.id === 'mimo-v2.5-pro-sgp')?.supportsVision).toBe(true);
-    expect(sgpProvider?.models?.find(m => m.id === 'mimo-v2.5-flash-sgp')?.supportsVision).toBe(true);
 
     expect(codingProvider?.models?.find(m => m.id === 'mimo-v2.5-coding')?.supportsVision).toBe(true);
     expect(codingProvider?.models?.find(m => m.id === 'mimo-v2.5-pro-coding')?.supportsVision).toBe(true);
 
-    expect(tudoProvider?.models?.find(m => m.id === 'mimo-v2.5')?.supportsVision).toBe(true);
-    expect(tudoProvider?.models?.find(m => m.id === 'mimo-v2.5-pro')?.supportsVision).toBe(true);
+    expect(proProvider?.models?.find(m => m.id === 'mimo-v2.5')?.supportsVision).toBe(true);
+    expect(proProvider?.models?.find(m => m.id === 'mimo-v2.5-pro')?.supportsVision).toBe(true);
   });
 });
 

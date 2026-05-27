@@ -67,7 +67,6 @@ const PROVIDER_COLORS: Record<string, string> = {
   xiaomi: '#ef4444',
   xiaomi_sgp_coding: '#ec4899',
   xiaomi_coding: '#a855f7',
-  xiaomi_tudo: '#f97316',
 };
 
 const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
@@ -77,7 +76,6 @@ const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   xiaomi: 'Xiaomi',
   xiaomi_sgp_coding: 'MiMo SGP Coding',
   xiaomi_coding: 'MiMo Coding',
-  xiaomi_tudo: 'Xiaomi Tudo',
 };
 
 const PROMPT_COLOR = '#3b82f6';

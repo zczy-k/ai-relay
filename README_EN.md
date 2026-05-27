@@ -16,7 +16,7 @@
 
 <p><strong><a href="https://vercel.com/new/clone?repository-url=https://github.com/MoyuFamily/ai-relay&env=RELAY_API_KEY,RELAY_ADMIN_KEY,RELAY_SIGNING_SECRET&envDescription=API%20authentication%20keys%20(required%20for%20security)&envLink=https://github.com/MoyuFamily/ai-relay#environment-variables">👉 Deploy Now</a></strong> · <a href="#-one-click-deploy-launch-your-ai-api-gateway-in-2-minutes">View setup steps</a></p>
 
-[![Version](https://img.shields.io/badge/Version-2.4.0-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-2.5.0-green.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org/)
 [![Edge Runtime](https://img.shields.io/badge/Edge_Runtime-⚡-black?logo=vercel)](https://vercel.com/docs/functions/edge-functions)
@@ -78,6 +78,8 @@
 | **Webhook Notifications** | WeCom / Feishu / DingTalk / Slack — daily reports + alerts |
 | **Temp API Keys** | HMAC-SHA256 stateless signing, auto-expiring |
 | **Virtual Model Mapping** | Route virtual model names to real providers |
+| **Smart Routing** | Latency / cost / availability priority, auto-select optimal provider |
+| **API Key Security** | Masked display, health monitoring, rotation alerts, audit logs |
 
 ## 🚀 One-Click Deploy: Launch Your AI API Gateway in 2 Minutes
 
@@ -235,10 +237,12 @@ Generate time-limited keys from the Admin dashboard:
 | `CLAUDE_KEYS` | Anthropic API Keys | ⬜ |
 | `DEEPSEEK_KEYS` | DeepSeek API Keys | ⬜ |
 | `XIAOMI_KEYS` | Xiaomi API Keys | ⬜ |
+| `XIAOMIMIMO_SGP_CODING_KEYS` | MiMo SGP Coding Plan API keys | ⬜ |
+| `XIAOMI_CODING_KEYS` | MiMo Coding Plan API keys | ⬜ |
 | `RELAY_KV_USAGE_SAMPLE_RATE` | Usage write sample rate; `1` is exact, `0.1` writes about 10% and scales values as estimates | ⬜ |
 
 > [!NOTE]
-> Provider keys are best configured via the Admin panel (stored in Upstash Redis), not as environment variables.
+> Provider keys are best configured via the Admin panel (stored in Upstash Redis), not as environment variables. When adding or testing keys in Admin, both raw API keys and Base64-encoded keys are accepted and decoded automatically before saving or testing.
 
 ### Supported Providers
 
@@ -247,7 +251,9 @@ Generate time-limited keys from the Admin dashboard:
 | OpenAI | gpt-5.4, gpt-latest, gpt-5.4-mini | ✅ Built-in |
 | Anthropic (Claude) | claude-sonnet-4-6, claude-opus-4-7 | ✅ Built-in |
 | DeepSeek | deepseek-v4-flash, deepseek-v4-pro | ✅ Built-in |
-| Xiaomi (MiMo) | mimo-7b | ✅ Built-in |
+| MiMo (API Key) | mimo-v2.5, mimo-v2.5-pro | ✅ Built-in |
+| MiMo SGP (Coding Plan) | mimo-v2.5-sgp, mimo-v2.5-pro-sgp | ✅ Built-in |
+| MiMo (Coding Plan) | mimo-v2.5-coding, mimo-v2.5-pro-coding | ✅ Built-in |
 | Custom | Any OpenAI-compatible API | ✅ Configurable |
 
 ## 🏗️ Architecture

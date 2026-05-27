@@ -370,6 +370,14 @@ export default function ProviderConfigEditor({
               >
                 {t.btnAddKey}
               </button>
+              <div style={{
+                flexBasis: '100%',
+                color: '#9ca3af',
+                fontSize: '0.78rem',
+                lineHeight: 1.4,
+              }}>
+                {t.addKeyHelp}
+              </div>
             </div>
 
             {/* Keys list */}
