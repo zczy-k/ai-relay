@@ -14,6 +14,27 @@ export function movePriorityRule<T>(rules: T[], fromIndex: number, toIndex: numb
   return next;
 }
 
+export function normalizeProviderOrder(providerOrder: string[]): string[] {
+  const seen = new Set<string>();
+  return providerOrder.map((provider) => provider.trim()).filter((provider) => {
+    if (!provider || seen.has(provider)) return false;
+    seen.add(provider);
+    return true;
+  });
+}
+
+export function addProviderToOrder(providerOrder: string[], providerId: string): string[] {
+  return normalizeProviderOrder([...providerOrder, providerId]);
+}
+
+export function removeProviderFromOrder(providerOrder: string[], providerId: string): string[] {
+  return providerOrder.filter((provider) => provider !== providerId);
+}
+
+export function moveProviderInOrder(providerOrder: string[], fromIndex: number, toIndex: number): string[] {
+  return movePriorityRule(providerOrder, fromIndex, toIndex);
+}
+
 export function createBlankPriorityRule(providerOrder: string[]): PriorityRule {
   const now = new Date().toISOString();
   const random = typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -70,6 +91,100 @@ const buttonStyle: React.CSSProperties = {
   color: '#d1d5db',
   cursor: 'pointer',
 };
+
+const smallButtonStyle: React.CSSProperties = {
+  ...buttonStyle,
+  padding: '0.32rem 0.5rem',
+  minHeight: 32,
+};
+
+function getProviderLabel(providers: ProviderInfo[], providerId: string): string {
+  return providers.find((provider) => provider.id === providerId)?.name || providerId;
+}
+
+interface ProviderOrderEditorProps {
+  providerOrder: string[];
+  providers: ProviderInfo[];
+  providerIds: string[];
+  onChange: (providerOrder: string[]) => void;
+}
+
+function ProviderOrderEditor({ providerOrder, providers, providerIds, onChange }: ProviderOrderEditorProps) {
+  const normalizedOrder = normalizeProviderOrder(providerOrder);
+  const selected = normalizedOrder;
+  const available = providerIds.filter((providerId) => !selected.includes(providerId));
+  const [customProviderId, setCustomProviderId] = useState('');
+
+  const commitCustomProvider = () => {
+    const providerId = customProviderId.trim();
+    if (!providerId) return;
+    onChange(addProviderToOrder(selected, providerId));
+    setCustomProviderId('');
+  };
+
+  return (
+    <div style={{ display: 'grid', gap: '0.55rem' }}>
+      <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        {selected.length === 0 ? (
+          <span style={{ color: '#fca5a5', fontSize: '0.85rem' }}>至少选择 1 个 provider</span>
+        ) : selected.map((providerId, providerIndex) => (
+          <div
+            key={`${providerId}-${providerIndex}`}
+            style={{
+              display: 'flex',
+              gap: '0.35rem',
+              alignItems: 'center',
+              border: '1px solid rgba(96,165,250,0.35)',
+              borderRadius: 8,
+              padding: '0.35rem',
+              background: 'rgba(37,99,235,0.12)',
+              maxWidth: '100%',
+            }}
+          >
+            <span style={{ color: '#bfdbfe', fontWeight: 700, fontSize: '0.82rem' }}>{providerIndex + 1}</span>
+            <span style={{ color: '#e5e7eb', fontSize: '0.86rem', overflowWrap: 'anywhere' }}>{getProviderLabel(providers, providerId)}</span>
+            <button type="button" style={smallButtonStyle} onClick={() => onChange(moveProviderInOrder(selected, providerIndex, providerIndex - 1))} disabled={providerIndex === 0} aria-label={`${providerId} 上移`}>↑</button>
+            <button type="button" style={smallButtonStyle} onClick={() => onChange(moveProviderInOrder(selected, providerIndex, providerIndex + 1))} disabled={providerIndex === selected.length - 1} aria-label={`${providerId} 下移`}>↓</button>
+            <button type="button" style={{ ...smallButtonStyle, color: '#fca5a5' }} onClick={() => onChange(removeProviderFromOrder(selected, providerId))} aria-label={`移除 ${providerId}`}>×</button>
+          </div>
+        ))}
+      </div>
+
+      {available.length > 0 && (
+        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ color: '#9ca3af', fontSize: '0.82rem' }}>添加</span>
+          {available.map((providerId) => (
+            <button key={providerId} type="button" style={smallButtonStyle} onClick={() => onChange(addProviderToOrder(selected, providerId))}>
+              + {getProviderLabel(providers, providerId)}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap' }}>
+        <input
+          value={customProviderId}
+          onChange={(event) => setCustomProviderId(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              commitCustomProvider();
+            }
+          }}
+          placeholder="自定义 provider id"
+          style={{ ...inputStyle, flex: '1 1 180px', minWidth: 0 }}
+          aria-label="自定义 provider id"
+        />
+        <button type="button" style={buttonStyle} onClick={commitCustomProvider} disabled={!customProviderId.trim()}>添加自定义</button>
+        {providerIds.length > 0 && (
+          <button type="button" style={buttonStyle} onClick={() => onChange(providerIds)} disabled={providerIds.every((providerId) => selected.includes(providerId))}>
+            使用全部
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function PriorityRulesTab({
   rules = [],
@@ -156,6 +271,7 @@ export default function PriorityRulesTab({
       ) : draftRules.map((rule, index) => {
         const state = getRuleConflictState(rule.id, visibleConflicts);
         const borderColor = state.severity === 'error' ? 'rgba(248,113,113,0.75)' : state.severity === 'warning' ? 'rgba(251,191,36,0.75)' : 'rgba(52,211,153,0.35)';
+        const providerOrder = normalizeProviderOrder(rule.providerOrder);
         return (
           <div key={rule.id} className="stat-card" style={{ color: '#d1d5db', border: `1px solid ${borderColor}`, borderRadius: 14, padding: '1rem', background: 'rgba(255,255,255,0.035)', display: 'grid', gap: '0.75rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap' }}>
@@ -174,15 +290,25 @@ export default function PriorityRulesTab({
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 1fr) minmax(220px, 2fr)', gap: '0.75rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))', gap: '0.75rem' }}>
               <label style={{ display: 'grid', gap: '0.35rem', color: '#9ca3af', fontSize: '0.85rem' }}>
                 model pattern
                 <input value={rule.modelPattern} onChange={(event) => updateRule(rule.id, { modelPattern: event.target.value })} placeholder="gpt-*" style={{ ...inputStyle, width: '100%' }} />
               </label>
-              <label style={{ display: 'grid', gap: '0.35rem', color: '#9ca3af', fontSize: '0.85rem' }}>
-                provider order
-                <input value={rule.providerOrder.join(', ')} onChange={(event) => updateRule(rule.id, { providerOrder: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) })} placeholder="openai, deepseek" style={{ ...inputStyle, width: '100%' }} />
-              </label>
+              <div style={{ display: 'grid', gap: '0.35rem', color: '#9ca3af', fontSize: '0.85rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <span>Provider 顺序</span>
+                  <span style={{ color: providerOrder.length > 0 ? '#93c5fd' : '#fca5a5', overflowWrap: 'anywhere' }}>
+                    {providerOrder.length > 0 ? providerOrder.join(' → ') : '未选择'}
+                  </span>
+                </div>
+                <ProviderOrderEditor
+                  providerOrder={providerOrder}
+                  providers={providers}
+                  providerIds={providerIds}
+                  onChange={(nextProviderOrder) => updateRule(rule.id, { providerOrder: nextProviderOrder })}
+                />
+              </div>
             </div>
           </div>
         );

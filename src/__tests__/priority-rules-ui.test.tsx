@@ -2,9 +2,13 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import PriorityRulesTab, {
+  addProviderToOrder,
   createBlankPriorityRule,
   getRuleConflictState,
+  moveProviderInOrder,
   movePriorityRule,
+  normalizeProviderOrder,
+  removeProviderFromOrder,
 } from '@/app/admin/components/PriorityRulesTab';
 import type { PriorityRuleConflict } from '@/app/admin/types';
 
@@ -27,6 +31,15 @@ describe('iteration three priority rules UI helpers', () => {
 
     expect(first).toMatchObject({ enabled: true, modelPattern: 'gpt-*', providerOrder: ['openai', 'deepseek'] });
     expect(second.id).not.toEqual(first.id);
+  });
+
+  it('edits provider order through structured helper operations', () => {
+    expect(normalizeProviderOrder([' openai ', 'deepseek', 'openai', ''])).toEqual(['openai', 'deepseek']);
+    expect(addProviderToOrder(['openai'], 'deepseek')).toEqual(['openai', 'deepseek']);
+    expect(addProviderToOrder(['openai'], 'openai')).toEqual(['openai']);
+    expect(removeProviderFromOrder(['openai', 'deepseek'], 'openai')).toEqual(['deepseek']);
+    expect(moveProviderInOrder(['openai', 'deepseek', 'anthropic'], 2, 0)).toEqual(['anthropic', 'openai', 'deepseek']);
+    expect(moveProviderInOrder(['openai'], 0, 2)).toEqual(['openai']);
   });
 
   it('derives the strongest realtime conflict state for a rule card', () => {
@@ -61,6 +74,9 @@ describe('iteration three priority rules UI helpers', () => {
     expect(html).toContain('冲突 1');
     expect(html).toContain('duplicate');
     expect(html).toContain('规则重复');
+    expect(html).toContain('Provider 顺序');
+    expect(html).toContain('添加自定义');
+    expect(html).toContain('+ DeepSeek');
     expect(html).toContain('disabled=""');
   });
 });
