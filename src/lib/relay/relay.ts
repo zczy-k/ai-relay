@@ -2,7 +2,7 @@
 // AI API Relay — Core Relay Logic (with 429 protection)
 // ============================================================
 
-import type { ChatCompletionRequest } from '../types';
+import type { AnthropicMessagesRequest, ChatCompletionRequest, ResponsesAPIRequest } from '../types';
 import type { RelayResult, ProviderConfig, ApiKey } from '../providers/types';
 import { resolveProvider, getUpstreamUrl, getUpstreamResponsesUrl, resolveModelAlias, resolveFallbackModel, resolveUpstreamModel, getAllProviders } from '../providers';
 import { selectKey, markCooldown, getKeyPool } from './key-pool';
@@ -19,6 +19,8 @@ import { withConcurrency } from './concurrency';
 import { smartRoute, recordProviderResult } from '../smart-routing';
 
 const usageStorage = new KVUsageStorage();
+type RelayApiType = 'chat' | 'responses' | 'anthropicMessages';
+type RelayRequestBody = ChatCompletionRequest | ResponsesAPIRequest | AnthropicMessagesRequest;
 
 /**
  * Record an upstream error to KV for admin dashboard tracking.
@@ -44,8 +46,8 @@ function recordError(
  * 4. Key rotation — switch to next available key on 429/5xx
  */
 export async function relayRequest(
-  body: ChatCompletionRequest,
-  apiType: 'chat' | 'responses' = 'chat'
+  body: RelayRequestBody,
+  apiType: RelayApiType = 'chat'
 ): Promise<RelayResult> {
   const provider = await resolveProvider(body.model);
   if (!provider) {
@@ -64,6 +66,14 @@ export async function relayRequest(
     );
   }
 
+  if (apiType === 'anthropicMessages' && provider.headerFormat !== 'anthropic') {
+    throw new RelayError(
+      `Anthropic Messages API is only supported for Anthropic-format providers. Model ${body.model} resolved to ${provider.displayName}.`,
+      'invalid_request_error',
+      400
+    );
+  }
+
   // Smart routing: check if a better provider is available based on routing strategy
   let effectiveProvider = provider;
   try {
@@ -71,7 +81,7 @@ export async function relayRequest(
     if (routingDecision.provider !== provider.name) {
       const allProviders = await getAllProviders();
       const reroutedProvider = allProviders[routingDecision.provider];
-      if (reroutedProvider) {
+      if (reroutedProvider && (apiType !== 'anthropicMessages' || reroutedProvider.headerFormat === 'anthropic')) {
         console.log(`[smart-route] Rerouting ${provider.displayName} → ${reroutedProvider.displayName} (${routingDecision.reason})`);
         effectiveProvider = reroutedProvider;
       }
@@ -173,6 +183,12 @@ export async function relayRequest(
       continue;
     }
 
+    if (apiType === 'anthropicMessages' && fbProvider.headerFormat !== 'anthropic') {
+      console.warn(`[fallback] ${fbProvider.displayName} does not support Anthropic Messages API, skipping`);
+      errors.push({ provider: fbProvider.displayName, error: 'Anthropic Messages API not supported (non-Anthropic format)' });
+      continue;
+    }
+
     const fbResult = await withConcurrency(
       () => tryProviderWithRetries(fbProvider, fbBody, fbKey, fbMaxRetries, apiType)
     );
@@ -196,10 +212,10 @@ export async function relayRequest(
  */
 async function tryProviderWithRetries(
   provider: ProviderConfig,
-  body: ChatCompletionRequest,
+  body: RelayRequestBody,
   initialKey: ApiKey | null,
   maxRetries: number,
-  apiType: 'chat' | 'responses' = 'chat'
+  apiType: RelayApiType = 'chat'
 ): Promise<{ result: RelayResult | null; lastError: Error | null }> {
   let currentKey = initialKey;
   let lastError: Error | null = null;
@@ -238,7 +254,7 @@ async function tryProviderWithRetries(
     // For Responses API: pass body directly (no Anthropic transform — Responses API is OpenAI-only)
     // For Chat API: inject stream_options and optionally transform to Anthropic format
     let requestBody: Record<string, unknown>;
-    if (apiType === 'responses') {
+    if (apiType === 'responses' || apiType === 'anthropicMessages') {
       requestBody = { ...body, model: resolvedModel };
     } else {
       const bodyWithResolvedModel: Record<string, unknown> = { ...body, model: resolvedModel };

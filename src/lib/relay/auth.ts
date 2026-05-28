@@ -121,9 +121,8 @@ export async function validateTempKey(token: string): Promise<boolean> {
  */
 export async function validateAuth(request: Request): Promise<boolean> {
   const authHeader = request.headers.get('authorization');
-  if (!authHeader) return false;
-
-  const token = authHeader.replace(/^Bearer\s+/i, '');
+  const anthropicKeyHeader = request.headers.get('x-api-key');
+  const token = authHeader?.replace(/^Bearer\s+/i, '') || anthropicKeyHeader || '';
   if (!token) return false;
 
   if (token.startsWith('sk-relay-temp-')) {

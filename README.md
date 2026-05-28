@@ -217,6 +217,24 @@ curl -X POST https://你的项目.vercel.app/v1/responses \
 
 > **注意：** Responses API 目前仅支持 OpenAI 格式的 Provider，Anthropic 格式的 Provider 会返回 400 错误。
 
+### Claude / Anthropic Messages API
+
+Claude 客户端可以直接把 `base_url` 指向 Relay 的 `/v1`，使用原生 Anthropic Messages 协议：
+
+```bash
+curl -X POST https://你的项目.vercel.app/v1/messages \
+  -H "x-api-key: YOUR_RELAY_API_KEY" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "claude-sonnet",
+    "max_tokens": 1024,
+    "messages": [{"role": "user", "content": "你好！"}]
+  }'
+```
+
+`/v1/messages` 只路由到 `headerFormat: anthropic` 的供应商；上游 Key 仍使用 `CLAUDE_KEYS` 或 Admin 后台配置的 Claude 供应商密钥。OpenAI 兼容客户端也可以继续通过 `/v1/chat/completions` 调用 Claude 模型，Relay 会转换为 Anthropic 上游请求。
+
 ### 临时密钥
 
 在 Admin 后台生成指定有效期的临时密钥：

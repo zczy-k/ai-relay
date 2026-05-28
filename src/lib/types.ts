@@ -59,6 +59,26 @@ export interface ResponsesAPIRequest {
   [key: string]: unknown;
 }
 
+/** Anthropic Messages API request (/v1/messages) */
+export interface AnthropicMessagesRequest {
+  model: string;
+  max_tokens: number;
+  messages: Array<{
+    role: 'user' | 'assistant';
+    content: string | Array<unknown>;
+  }>;
+  system?: string | Array<unknown>;
+  stream?: boolean;
+  temperature?: number;
+  top_p?: number;
+  top_k?: number;
+  stop_sequences?: string[];
+  tools?: unknown[];
+  tool_choice?: unknown;
+  // Allow passthrough of any other Anthropic params
+  [key: string]: unknown;
+}
+
 /** Error response in OpenAI format */
 export interface ErrorResponse {
   error: {
