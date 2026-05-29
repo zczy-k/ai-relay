@@ -16,7 +16,7 @@
 
 <p><strong><a href="https://vercel.com/new/clone?repository-url=https://github.com/MoyuFamily/ai-relay&env=RELAY_API_KEY,RELAY_ADMIN_KEY,RELAY_SIGNING_SECRET&envDescription=API%20authentication%20keys%20(required%20for%20security)&envLink=https://github.com/MoyuFamily/ai-relay#environment-variables">👉 Deploy Now</a></strong> · <a href="#-one-click-deploy-launch-your-ai-api-gateway-in-2-minutes">View setup steps</a></p>
 
-[![Version](https://img.shields.io/badge/Version-2.5.0-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-2.7.0-green.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org/)
 [![Edge Runtime](https://img.shields.io/badge/Edge_Runtime-⚡-black?logo=vercel)](https://vercel.com/docs/functions/edge-functions)
@@ -36,7 +36,7 @@
 |---|---|
 | **How do I deploy it?** | Click Deploy with Vercel, set 3 environment variables, and launch in about 2 minutes |
 | **Do I need a server?** | No VPS, no Docker, no backend operations |
-| **Can it start free?** | Built for Vercel Edge + KV, friendly to personal and small-team free-tier usage |
+| **Can it start free?** | Built for Vercel Edge + KV, friendly to personal and small-team free-tier usage; Upstash free tier offers 500K KV operations/month, with sampling enabled the request-to-KV ratio can drop to ~1:1 |
 | **Is integration hard?** | Keep the OpenAI SDK, change only `base_url`, and keep using `/v1/chat/completions` |
 
 ## Table of Contents

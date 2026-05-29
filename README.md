@@ -16,7 +16,7 @@
 
 <p><strong><a href="https://vercel.com/new/clone?repository-url=https://github.com/MoyuFamily/ai-relay&env=RELAY_API_KEY,RELAY_ADMIN_KEY,RELAY_SIGNING_SECRET&envDescription=API%20authentication%20keys%20(required%20for%20security)&envLink=https://github.com/MoyuFamily/ai-relay#environment-variables">👉 立即一键部署</a></strong> · <a href="#-一键部署2-分钟上线你的-ai-api-网关">查看部署步骤</a></p>
 
-[![Version](https://img.shields.io/badge/Version-2.5.0-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-2.7.0-green.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org/)
 [![Edge Runtime](https://img.shields.io/badge/Edge_Runtime-⚡-black?logo=vercel)](https://vercel.com/docs/functions/edge-functions)
@@ -36,7 +36,7 @@
 |---|---|
 | **怎么部署？** | 点一下 Deploy with Vercel，填 3 个环境变量，约 2 分钟上线 |
 | **要服务器吗？** | 不需要 VPS，不需要 Docker，不需要后端运维 |
-| **能免费跑吗？** | 面向 Vercel Edge + KV 设计，个人 / 小团队可从免费层开始 |
+| **能免费跑吗？** | 面向 Vercel Edge + KV 设计，个人 / 小团队可从免费层开始；Upstash 免费层每月 50 万次 KV 操作，开启采样后请求与 KV 读写比可低至 1:1 |
 | **接入复杂吗？** | OpenAI SDK 只改 `base_url`，继续使用 `/v1/chat/completions` |
 
 ## 目录
