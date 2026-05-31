@@ -3,13 +3,13 @@ import { NextRequest } from 'next/server';
 import { requireAdminAuth } from '@/lib/admin';
 import { getAllProviders } from '@/lib/providers';
 import { getKeyPoolStats, initAllKeyPools, getRateLimiterStats } from '@/lib/relay';
-import { KVUsageStorage } from '@/lib/usage';
+import { createUsageStorage } from '@/lib/usage/factory';
 import { getProviderHealthSnapshot } from '@/lib/health/storage';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const usageStorage = new KVUsageStorage();
+
 
 type LegacyHealthStatus = 'available' | 'degraded' | 'unavailable';
 
@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
   const authResponse = requireAdminAuth(request);
   if (authResponse) return authResponse;
 
+  const usageStorage = await createUsageStorage();
   const url = new URL(request.url);
   const forceRefresh = url.searchParams.get('refresh') === '1';
   const providers = await getAllProviders(forceRefresh);

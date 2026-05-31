@@ -7,16 +7,15 @@
 import { NextRequest } from 'next/server';
 import { validateAuth, relayRequest } from '@/lib/relay';
 import { RelayError } from '@/lib/errors';
-import { KVUsageStorage, createUsageEvent, getBatchRecorder } from '@/lib/usage';
+import { createUsageEvent, getBatchRecorder } from '@/lib/usage';
+import { createUsageStorage } from '@/lib/usage/factory';
 import { recordRequestLog } from '@/lib/observability/request-logs';
 import type { AnthropicMessagesRequest } from '@/lib/types';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const usageStorage = new KVUsageStorage();
 const batchRecorder = getBatchRecorder();
-batchRecorder.setStorage(usageStorage);
 
 const CHARS_PER_TOKEN = 4;
 
@@ -96,7 +95,7 @@ function wrapAnthropicStreamWithUsageTracking(
       latencyMs,
       isStream: true,
     });
-    batchRecorder.record(event);
+    await batchRecorder.record(event);
     await recordRequestLog({
       traceId,
       timestamp: new Date().toISOString(),
@@ -181,6 +180,8 @@ function validateBody(body: Partial<AnthropicMessagesRequest>): string | null {
 }
 
 export async function POST(request: NextRequest) {
+  const usageStorage = await createUsageStorage();
+  batchRecorder.setStorage(usageStorage as any);
   const traceId = request.headers.get('x-request-id') || `trace_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 
   if (!(await validateAuth(request))) {
@@ -262,7 +263,7 @@ export async function POST(request: NextRequest) {
           latencyMs,
           isStream: false,
         });
-        batchRecorder.record(event);
+        await batchRecorder.record(event);
         await recordRequestLog({
           traceId,
           timestamp: new Date().toISOString(),

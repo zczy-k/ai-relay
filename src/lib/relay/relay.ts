@@ -9,6 +9,7 @@ import { selectKey, markCooldown, getKeyPool } from './key-pool';
 import { buildHeaders, transformToAnthropic } from './transform';
 import { RelayError } from '../errors';
 import { KVUsageStorage } from '../usage/storage/kv-storage';
+import { createUsageStorage } from '../usage/factory';
 import {
   checkRateLimit,
   record429,
@@ -18,7 +19,22 @@ import {
 import { withConcurrency } from './concurrency';
 import { smartRoute, recordProviderResult, isSmartRoutingConfigured } from '../smart-routing';
 
-const usageStorage = new KVUsageStorage();
+// Module-level cached storage instance for error recording.
+// Falls back to KVUsageStorage synchronously on first call to avoid
+// blocking the hot path; replaced with the correct backend after the
+// first async resolution completes.
+let _errorStorage: { recordError: (e: any) => Promise<void> } | null = null;
+
+async function getErrorStorage() {
+  if (_errorStorage) return _errorStorage;
+  try {
+    _errorStorage = await createUsageStorage();
+  } catch {
+    _errorStorage = new KVUsageStorage();
+  }
+  return _errorStorage;
+}
+
 type RelayApiType = 'chat' | 'responses' | 'anthropicMessages';
 type RelayRequestBody = ChatCompletionRequest | ResponsesAPIRequest | AnthropicMessagesRequest;
 
@@ -32,7 +48,7 @@ function recordError(
   statusCode: number,
   reason: string
 ): Promise<void> {
-  return usageStorage.recordError({ provider, keyHash, statusCode, reason });
+  return getErrorStorage().then(s => s.recordError({ provider, keyHash, statusCode, reason }));
 }
 
 /**

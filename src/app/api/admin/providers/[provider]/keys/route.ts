@@ -7,7 +7,7 @@ import { NextRequest } from 'next/server';
 import { requireAdminAuth, getManagedKeys, removeManagedKey, setManagedKeys, tryDecodeBase64 } from '@/lib/admin';
 import { getAllProviders } from '@/lib/providers';
 import { hashKey, updateMemoryKeyPool } from '@/lib/relay';
-import { KVUsageStorage } from '@/lib/usage';
+import { createUsageStorage } from '@/lib/usage/factory';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -40,7 +40,12 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
     );
   }
 
-  const managedKeys = await getManagedKeys(provider);
+  let managedKeys: string[] | null = null;
+  try {
+    managedKeys = await getManagedKeys(provider);
+  } catch {
+    // KV unavailable — fall back to env keys
+  }
   const envKeys = config.envKeyField
     ? (process.env[config.envKeyField] || '').split(',').map((k) => k.trim()).filter(Boolean)
     : [];
@@ -125,7 +130,12 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   const envKeys = config.envKeyField
     ? (process.env[config.envKeyField] || '').split(',').map((k) => k.trim()).filter(Boolean)
     : [];
-  const existing = await getManagedKeys(provider);
+  let existing: string[] | null = null;
+  try {
+    existing = await getManagedKeys(provider);
+  } catch {
+    // KV unavailable — bootstrap from env keys
+  }
   const current = existing ? [...existing] : [...envKeys];
   const initialCount = current.length;
   const addedKeys: string[] = [];
@@ -237,7 +247,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Params 
     updateMemoryKeyPool(provider, remaining);
 
     // Clear key errors from storage when a key is deleted
-    const usageStorage = new KVUsageStorage();
+    const usageStorage = await createUsageStorage();
     await usageStorage.clearKeyErrors(keyHash);
 
     return Response.json({

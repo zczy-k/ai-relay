@@ -6,14 +6,14 @@
 import { NextRequest } from 'next/server';
 import { requireAdminAuth } from '@/lib/admin';
 import { getKeyPoolStats, initAllKeyPools } from '@/lib/relay';
-import { KVUsageStorage } from '@/lib/usage';
+import { createUsageStorage } from '@/lib/usage/factory';
 import { getAllProviders } from '@/lib/providers';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
-const usageStorage = new KVUsageStorage();
+
 
 /**
  * GET /api/admin/usage
@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
   const authErr = requireAdminAuth(request);
   if (authErr) return authErr;
 
+  const usageStorage = await createUsageStorage();
   const allProviders = await getAllProviders();
   // Eagerly init all provider pools
   await initAllKeyPools(allProviders);

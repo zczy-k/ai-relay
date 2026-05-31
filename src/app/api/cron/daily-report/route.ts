@@ -8,11 +8,11 @@
 import { NextRequest } from 'next/server';
 import { sendDailyReport } from '@/lib/webhooks';
 import { getWebhookSettings } from '@/lib/admin/admin-config';
-import { KVUsageStorage } from '@/lib/usage';
+import { createUsageStorage } from '@/lib/usage/factory';
 
 export const runtime = 'nodejs';
 
-const usageStorage = new KVUsageStorage();
+
 
 /**
  * GET /api/cron/daily-report
@@ -20,9 +20,12 @@ const usageStorage = new KVUsageStorage();
  */
 export async function GET(request: NextRequest) {
   // Vercel cron sends a special header; also allow admin auth
+  const usageStorage = await createUsageStorage();
   const isVercelCron = request.headers.get('x-vercel-cron') === '1';
+  const cronSecret = process.env.CRON_SECRET;
+  const isCronSecret = !!(cronSecret && request.headers.get('x-cron-secret') === cronSecret);
 
-  if (!isVercelCron) {
+  if (!isVercelCron && !isCronSecret) {
     // If not a Vercel cron call, require admin auth
     const { requireAdminAuth } = await import('@/lib/admin');
     const authErr = requireAdminAuth(request);

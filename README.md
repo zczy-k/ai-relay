@@ -132,6 +132,68 @@ curl -X POST https://你的项目.vercel.app/v1/chat/completions \
 🎉 **完成！** 你已经拥有一个支持多 Provider、自动故障转移的 AI API 中转服务。
 
 <details>
+<summary><strong>☁️ 部署到 Cloudflare Pages（全自动）</strong></summary>
+
+**前置条件：** [Cloudflare 账号](https://dash.cloudflare.com/sign-up)（免费）+ GitHub 仓库
+
+> ⚠️ **重要：** 必须先配置 GitHub Secrets，否则部署会失败。
+
+**第 1 步 — Fork 仓库并配置 GitHub Secrets**
+
+在 GitHub 仓库的 **Settings → Secrets and variables → Actions → Repository secrets**（不是 Environment secrets）中添加以下 Secrets：
+
+| Secret | 说明 | 必填 |
+|--------|------|------|
+| `CLOUDFLARE_API_TOKEN` | CF API Token（需要 Pages:Edit + D1:Edit + KV:Edit 权限） | ✅ |
+| `CLOUDFLARE_ACCOUNT_ID` | CF 账号 ID（在 CF Dashboard 右侧可找到） | ✅ |
+| `RELAY_API_KEY` | 客户端请求鉴权密钥（自定义强密码） | ✅ |
+| `RELAY_ADMIN_KEY` | 后台管理登录密钥（可选，默认同 `RELAY_API_KEY`） | ⬜ |
+| `RELAY_SIGNING_SECRET` | 临时 Key 签名密钥（可选，默认同 `RELAY_API_KEY`） | ⬜ |
+| `CRON_SECRET` | Cron 任务鉴权密钥（可选，自动生成） | ⬜ |
+
+> **如何获取 Cloudflare API Token：**
+> 1. 访问 [Cloudflare Dashboard](https://dash.cloudflare.com/profile/api-tokens)
+> 2. 点击 **Create Token** → **Create Custom Token**
+> 3. 权限设置：
+>    - Account → Cloudflare Pages → Edit
+>    - Account → D1 → Edit
+>    - Account → Workers KV Storage → Edit
+> 4. 复制生成的 Token
+>
+> **如何获取 Account ID：**
+> 1. 访问 [Cloudflare Dashboard](https://dash.cloudflare.com/)
+> 2. 在右侧边栏可以看到 **Account ID**
+>
+> **⚠️ 注意：** 必须添加到 **Repository secrets**，不是 Environment secrets。Environment secrets 只在特定环境部署时可用，会导致 workflow 无法读取。
+
+**第 2 步 — 推送触发部署**
+
+推送到 `main` 分支，GitHub Actions 会自动完成所有配置：
+
+✅ 验证 GitHub Secrets 已配置  
+✅ 自动检测并创建 D1 数据库（`ai-relay`）  
+✅ 自动检测并创建 KV namespace（`ai-relay`）  
+✅ 自动执行 D1 migrations（建表）  
+✅ 自动构建并部署到 Cloudflare Pages  
+✅ 自动配置环境变量  
+✅ 自动绑定 KV/D1 资源  
+
+**第 3 步 — 验证部署**
+
+```bash
+curl https://ai-relay.pages.dev/health
+# → {"status":"ok"}
+```
+
+访问 `https://ai-relay.pages.dev/admin` 开始使用！
+
+> **存储说明：** CF 部署使用 Cloudflare KV（配置数据）+ D1（用量统计）。免费层限制：D1 写入 10 万行/天（约支持 3–5 万次 AI 请求/天），KV 写入 1,000 次/天（仅用于配置变更，正常使用不会触及上限）。开启 quota 检查时每次请求写一行 D1，高并发场景请关注用量。
+> 
+> **Cron 说明：** CF Pages Cron Triggers 通过 `worker.ts` 中的 `scheduled()` handler 执行定时任务，不走 HTTP 路由。默认配置每日 00:00 UTC 重置配额计数器，00:05 UTC 执行健康探测。
+
+</details>
+
+<details>
 <summary><strong>📦 本地开发</strong></summary>
 
 ```bash

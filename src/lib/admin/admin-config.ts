@@ -188,6 +188,20 @@ export function createMemoryMockKV() {
 
 async function getKV() {
   const g = global as any;
+
+  // Cloudflare Pages: use CF KV binding via CFKVAdapter
+  const { isCloudflare, getCFEnv } = await import('@/lib/cf-env');
+  if (await isCloudflare()) {
+    try {
+      const cfEnv = await getCFEnv();
+      if (cfEnv?.KV) {
+        const { CFKVAdapter } = await import('./cf-kv-adapter');
+        return new CFKVAdapter(cfEnv.KV);
+      }
+    } catch { /* fall through */ }
+    return null;
+  }
+
   if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
     if (_kv && !_kv._isMock) return _kv;
     try {
@@ -540,26 +554,27 @@ export async function getManagedKeys(providerName: string, forceRefresh = false)
 
   const kv = await getKV();
   if (kv) {
-    const raw = await withTimeout(
-      kv.get(`${PREFIX.keys}${providerName}`),
-      1000,
-      undefined,
-      `getManagedKeys:${providerName}`
-    );
-    if (raw === undefined) {
-      throw new Error(`Timeout fetching managed keys for ${providerName}`);
-    }
-    if (raw) {
-      const parsed = parseJsonOrArray(raw);
-      if (parsed) {
-        setCached(cacheKey, parsed);
-        return parsed;
+    try {
+      const raw = await withTimeout(
+        kv.get(`${PREFIX.keys}${providerName}`),
+        1000,
+        null,
+        `getManagedKeys:${providerName}`
+      );
+      if (raw) {
+        const parsed = parseJsonOrArray(raw);
+        if (parsed) {
+          setCached(cacheKey, parsed);
+          return parsed;
+        }
       }
+    } catch {
+      // KV unavailable — fall through to return null
     }
     setCached(cacheKey, null);
     return null;
   }
-  throw new Error('KV storage not configured');
+  return null;
 }
 
 export async function getManagedKeysVersion(providerName: string): Promise<number> {
@@ -568,15 +583,17 @@ export async function getManagedKeysVersion(providerName: string): Promise<numbe
   if (cached !== null) return cached;
 
   const kv = await getKV();
-  if (!kv) throw new Error('KV storage not configured');
-  const raw = await withTimeout(
-    kv.get(`${PREFIX.keyVersion}${providerName}`),
-    1000,
-    undefined,
-    `getManagedKeysVersion:${providerName}`
-  );
-  if (raw === undefined) {
-    throw new Error(`Timeout fetching key version for ${providerName}`);
+  if (!kv) return 0;
+  let raw: any;
+  try {
+    raw = await withTimeout(
+      kv.get(`${PREFIX.keyVersion}${providerName}`),
+      1000,
+      null,
+      `getManagedKeysVersion:${providerName}`
+    );
+  } catch {
+    return 0;
   }
   const version = Number(raw || 0);
   setCached(cacheKey, version, CONFIG_CACHE_TTL_MS); // 60s cache
@@ -1202,26 +1219,26 @@ export async function importBackupData(data: Record<string, any>): Promise<void>
 
     // Restore keys (if present)
     if ('keys' in data && data.keys && typeof data.keys === 'object') {
-      for (const name of allProviderNames) {
-        await kv.del(`${PREFIX.keys}${name}`);
-      }
+      await Promise.all(allProviderNames.map((name) => kv.del(`${PREFIX.keys}${name}`)));
+      const setPromises: Promise<void>[] = [];
       for (const [provider, keys] of Object.entries(data.keys)) {
         if (Array.isArray(keys) && keys.length > 0) {
-          await setManagedKeys(provider, keys);
+          setPromises.push(setManagedKeys(provider, keys));
         }
       }
+      await Promise.all(setPromises);
     }
 
     // Restore fallbacks (if present)
     if ('fallbacks' in data && data.fallbacks && typeof data.fallbacks === 'object') {
-      for (const name of allProviderNames) {
-        await kv.del(`${PREFIX.fallbacks}${name}`);
-      }
+      await Promise.all(allProviderNames.map((name) => kv.del(`${PREFIX.fallbacks}${name}`)));
+      const fallbackPromises: Promise<void>[] = [];
       for (const [provider, fallbacks] of Object.entries(data.fallbacks)) {
         if (Array.isArray(fallbacks) && fallbacks.length > 0) {
-          await setFallbackChain(provider, fallbacks);
+          fallbackPromises.push(setFallbackChain(provider, fallbacks));
         }
       }
+      await Promise.all(fallbackPromises);
     }
   }
 
@@ -1235,7 +1252,22 @@ export async function importBackupData(data: Record<string, any>): Promise<void>
 export async function exportStatsData(startDate: string, endDate: string): Promise<Record<string, any>> {
   const kv = await getKV();
   if (!kv) {
-    throw new Error('KV storage not configured');
+    return {
+      type: 'ai-relay-stats-backup',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      startDate,
+      endDate,
+      data: {
+        usageDaily: {},
+        usageProviderDaily: {},
+        errorProviderDaily: {},
+        dailyReports: {},
+        quotaDaily: {},
+        quotaMonthly: {},
+        errorKeys: {}
+      }
+    };
   }
 
   // Parse dates
@@ -1392,11 +1424,43 @@ export async function importStatsData(payload: Record<string, any>): Promise<voi
     pipeline.expire(`quota:monthly:${month}`, 35 * 24 * 60 * 60); // 35 days standard TTL
   }
 
-  // Restore daily reports
-  for (const [date, val] of Object.entries(dailyReports)) {
+  // Restore daily reports — if dailyReports is empty but usageDaily has data,
+  // synthesize reports from raw usage so the chart has something to display.
+  const reportsToWrite: Record<string, object> = { ...dailyReports };
+  for (const [date, raw] of Object.entries(usageDaily as Record<string, any>)) {
+    if (reportsToWrite[date]) continue; // prefer explicit report if present
+    if (!raw || typeof raw !== 'object') continue;
+    const byProvider: Record<string, object> = {};
+    const providerData = (usageProviderDaily as Record<string, Record<string, any>>);
+    for (const [provider, datesData] of Object.entries(providerData)) {
+      const pRaw = datesData?.[date];
+      if (pRaw && typeof pRaw === 'object' && Object.keys(pRaw).length > 0) {
+        byProvider[provider] = {
+          requests: Number(pRaw.requests ?? 0),
+          tokens: Number(pRaw.tokens ?? 0),
+          promptTokens: Number(pRaw.promptTokens ?? 0),
+          completionTokens: Number(pRaw.completionTokens ?? 0),
+        };
+      }
+    }
+    reportsToWrite[date] = {
+      date,
+      summary: {
+        totalRequests: Number(raw.requests ?? 0),
+        totalTokens: Number(raw.tokens ?? 0),
+        promptTokens: Number(raw.promptTokens ?? 0),
+        completionTokens: Number(raw.completionTokens ?? 0),
+        errorRate: 0,
+        p95LatencyMs: null,
+      },
+      byProvider,
+      topModels: [],
+    };
+  }
+  for (const [date, val] of Object.entries(reportsToWrite)) {
     if (val && typeof val === 'object') {
       pipeline.set(`relay:report:daily:${date}`, JSON.stringify(val));
-      pipeline.expire(`relay:report:daily:${date}`, 30 * 24 * 60 * 60); // 30 days standard TTL
+      pipeline.expire(`relay:report:daily:${date}`, 30 * 24 * 60 * 60);
     }
   }
 
@@ -1434,5 +1498,46 @@ export async function importStatsData(payload: Record<string, any>): Promise<voi
   }
 
   await pipeline.exec();
+
+  // On CF, also write usage data to D1 so the chart reads from the correct store
+  try {
+    const { getCFEnv } = await import('@/lib/cf-env');
+    const cfEnv = await getCFEnv();
+    if (cfEnv?.DB) {
+      const d1Stmts: any[] = [];
+      const upsertSql = `INSERT INTO daily_usage (date, provider, requests, tokens, prompt_tokens, completion_tokens)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT (date, provider) DO UPDATE SET
+           requests = excluded.requests, tokens = excluded.tokens,
+           prompt_tokens = excluded.prompt_tokens, completion_tokens = excluded.completion_tokens`;
+
+      for (const [date, raw] of Object.entries(usageDaily as Record<string, any>)) {
+        if (!raw || typeof raw !== 'object') continue;
+        d1Stmts.push(cfEnv.DB.prepare(upsertSql).bind(
+          date, '',
+          Number(raw.requests || 0), Number(raw.tokens || 0),
+          Number(raw.promptTokens || 0), Number(raw.completionTokens || 0)
+        ));
+      }
+
+      for (const [provider, datesData] of Object.entries(usageProviderDaily as Record<string, Record<string, any>>)) {
+        if (!datesData || typeof datesData !== 'object') continue;
+        for (const [date, raw] of Object.entries(datesData)) {
+          if (!raw || typeof raw !== 'object') continue;
+          d1Stmts.push(cfEnv.DB.prepare(upsertSql).bind(
+            date, provider,
+            Number(raw.requests || 0), Number(raw.tokens || 0),
+            Number(raw.promptTokens || 0), Number(raw.completionTokens || 0)
+          ));
+        }
+      }
+
+      for (let i = 0; i < d1Stmts.length; i += 100) {
+        await cfEnv.DB.batch(d1Stmts.slice(i, i + 100));
+      }
+    }
+  } catch {
+    // Non-critical: D1 write failure should not fail the whole import
+  }
 }
 

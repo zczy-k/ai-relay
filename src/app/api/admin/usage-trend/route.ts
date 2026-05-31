@@ -4,14 +4,14 @@
 
 import { NextRequest } from 'next/server';
 import { requireAdminAuth } from '@/lib/admin';
-import { KVUsageStorage } from '@/lib/usage';
+import { createUsageStorage } from '@/lib/usage/factory';
 import { getUsageSamplingInfo } from '@/lib/usage/storage/kv-storage';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
-const usageStorage = new KVUsageStorage();
+
 
 /** Valid range options per granularity */
 const VALID_RANGES: Record<string, string[]> = {
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
   const authResponse = requireAdminAuth(request);
   if (authResponse) return authResponse;
 
-  // Parse parameters
+  const usageStorage = await createUsageStorage();
   const { searchParams } = new URL(request.url);
   const granularity = (searchParams.get('granularity') || 'day') as 'day' | 'week' | 'month';
 

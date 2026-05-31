@@ -116,7 +116,7 @@ describe('KV command optimization', () => {
     recorder.setStorage(storage);
     const date = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-    recorder.record(usageEvent());
+    await recorder.record(usageEvent());
     await recorder.flush();
 
     expect(await kv.hgetall(kvKeys.usageDaily(date))).toMatchObject({
@@ -140,7 +140,7 @@ describe('KV command optimization', () => {
     recorder.setStorage(storage);
     const date = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-    recorder.record(usageEvent());
+    await recorder.record(usageEvent());
     await recorder.flush();
 
     expect(await kv.hgetall(kvKeys.usageDaily(date))).toBeNull();
@@ -154,8 +154,8 @@ describe('KV command optimization', () => {
     recorder.setStorage(storage);
     const date = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-    recorder.record(usageEvent());
-    recorder.record(usageEvent({ completionTokens: 5 }));
+    await recorder.record(usageEvent());
+    await recorder.record(usageEvent({ completionTokens: 5 }));
     await recorder.flush();
 
     expect(await kv.hgetall(kvKeys.usageDaily(date))).toMatchObject({

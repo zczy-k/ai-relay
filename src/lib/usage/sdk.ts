@@ -88,7 +88,11 @@ export interface UsageStorage {
     daily: { requests: number; tokens: number };
     total: { requests: number; tokens: number };
   } | null>;
-  getGlobalUsage(): Promise<{ requests: number; tokens: number } | null>;
+  getGlobalUsage(): Promise<{
+    requests: number; tokens: number; promptTokens: number; completionTokens: number;
+    providers: Record<string, { requests: number; tokens: number; promptTokens: number; completionTokens: number }>;
+  } | null>;
+  getMonthlyUsage(): Promise<{ requests: number; tokens: number; promptTokens: number; completionTokens: number } | null>;
   getUsageTrend(
     range: string,
     granularity: 'day' | 'week' | 'month'
@@ -97,6 +101,14 @@ export interface UsageStorage {
     providers: ProviderTrendPoint[];
   }>;
   checkQuota(reserve?: boolean): Promise<QuotaStatus>;
+  getErrorStats(): Promise<Record<string, Record<string, number>>>;
+  getKeyErrors(): Promise<Array<{ keyHash: string; errors: Record<string, { count: number; reason: string }> }>>;
+  getDailyReport(date: string): Promise<import('@/lib/webhooks/types').DailyReportData | null>;
+  clearKeyErrors(keyHash: string): Promise<void>;
+  recordDirect(event: UsageEvent, requestCount?: number, options?: { includeGlobal?: boolean }): Promise<void>;
+  recordError(event: { provider: string; keyHash: string; statusCode: number; reason: string }): Promise<void>;
+  recordErrorDirect(event: { provider: string; keyHash: string; statusCode: number; reason: string; count?: number }): Promise<void>;
+  flush(): Promise<void>;
 }
 
 export interface TrendPoint {

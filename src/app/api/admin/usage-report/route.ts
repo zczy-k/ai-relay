@@ -5,7 +5,8 @@
 
 import { NextRequest } from 'next/server';
 import { requireAdminAuth } from '@/lib/admin';
-import { getUsageDailyReportsWithGaps, reportsToTrend } from '@/lib/usage/daily-report-store';
+import { getUsageDailyReportsWithGaps, reportsToTrend, enumerateDateKeys, createEmptyUsageDailyReport, type UsageDailyReport } from '@/lib/usage/daily-report-store';
+import { getCFEnv } from '@/lib/cf-env';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -23,6 +24,66 @@ export async function GET(request: NextRequest) {
   const from = url.searchParams.get('from') || to;
 
   try {
+    const cfEnv = await getCFEnv();
+    if (cfEnv?.DB) {
+      const dates = enumerateDateKeys(from, to);
+      const rows = await cfEnv.DB.prepare(
+        `SELECT date, provider, requests, tokens, prompt_tokens, completion_tokens
+         FROM daily_usage WHERE date >= ? AND date <= ? ORDER BY date ASC`
+      ).bind(from, to).all();
+
+      const byDate = new Map<string, { global: any; providers: Record<string, any> }>();
+      for (const date of dates) byDate.set(date, { global: null, providers: {} });
+
+      for (const row of (rows.results || []) as any[]) {
+        const entry = byDate.get(row.date);
+        if (!entry) continue;
+        if (row.provider === '') {
+          entry.global = row;
+        } else {
+          entry.providers[row.provider] = row;
+        }
+      }
+
+      const reports: UsageDailyReport[] = [];
+      const timeline: UsageDailyReport[] = [];
+      for (const date of dates) {
+        const entry = byDate.get(date)!;
+        if (entry.global) {
+          const report: UsageDailyReport = {
+            date,
+            summary: {
+              totalRequests: Number(entry.global.requests),
+              totalTokens: Number(entry.global.tokens),
+              promptTokens: Number(entry.global.prompt_tokens),
+              completionTokens: Number(entry.global.completion_tokens),
+              errorRate: 0,
+              p95LatencyMs: null,
+            },
+            byProvider: Object.fromEntries(
+              Object.entries(entry.providers).map(([p, r]: [string, any]) => [p, {
+                requests: Number(r.requests),
+                tokens: Number(r.tokens),
+                promptTokens: Number(r.prompt_tokens),
+                completionTokens: Number(r.completion_tokens),
+              }])
+            ),
+            topModels: [],
+          };
+          reports.push(report);
+          timeline.push(report);
+        } else {
+          timeline.push(createEmptyUsageDailyReport(date));
+        }
+      }
+
+      return Response.json({
+        range: { from, to },
+        reports,
+        trend: reportsToTrend(timeline),
+      }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
+    }
+
     const { reports, timeline } = await getUsageDailyReportsWithGaps(from, to);
     return Response.json({
       range: { from, to },

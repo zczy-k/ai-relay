@@ -11,9 +11,9 @@
 // - Graceful: try to flush remaining on process exit (best-effort)
 // - Risk: un-flushed data lost on cold restart (max ~60s of data)
 
-import type { KVUsageStorage } from './kv-storage';
+import type { UsageStorage, UsageEvent } from '../sdk';
 import { getUsageSamplingInfo, shouldSample } from './kv-storage';
-import type { UsageEvent } from '../sdk';
+import { isCloudflare } from '@/lib/cf-env';
 
 const MAX_BATCH_SIZE = 100;
 const FLUSH_INTERVAL_MS = 60_000;
@@ -29,7 +29,7 @@ export class BatchUsageRecorder {
   private pending = new Map<string, PendingEntry>();
   private errorPending = new Map<string, { count: number; reason: string }>();
   private flushTimer: ReturnType<typeof setInterval> | null = null;
-  private storage: KVUsageStorage | null = null;
+  private storage: UsageStorage | null = null;
   private totalPending = 0;
   private destroyed = false;
   private flushing = false;
@@ -37,16 +37,29 @@ export class BatchUsageRecorder {
   /**
    * Attach the storage backend. Must be called before record().
    */
-  setStorage(storage: KVUsageStorage): void {
+  setStorage(storage: UsageStorage): void {
     this.storage = storage;
   }
 
   /**
    * Buffer a usage event. Aggregates by key for efficient batch writes.
+   * On Cloudflare Workers, bypasses the buffer and writes directly to
+   * D1 storage within the request lifecycle (the timer-based flush
+   * strategy is unreliable on Workers because the runtime suspends
+   * immediately after the response is sent).
    */
-  record(event: UsageEvent): void {
+  async record(event: UsageEvent): Promise<void> {
     if (this.destroyed) return;
 
+    // Cloudflare Workers: bypass memory buffer, write directly to D1
+    if (await isCloudflare()) {
+      if (this.storage) {
+        await this.storage.record(event);
+      }
+      return;
+    }
+
+    // Vercel / Node.js: batch in memory as before
     const usageSampleRate = getUsageSamplingInfo().sampleRate;
     if (!shouldSample(usageSampleRate)) return;
     const usageScale = usageSampleRate > 0 && usageSampleRate < 1
@@ -238,14 +251,19 @@ export function getBatchRecorder(): BatchUsageRecorder {
   if (!_batchRecorder) {
     _batchRecorder = new BatchUsageRecorder();
 
-    // Best-effort graceful shutdown (works in long-running processes)
-    if (typeof process !== 'undefined') {
+    // Best-effort graceful shutdown — only in Node.js (not Edge/Workers runtimes
+    // where process.on exists but is a no-op or throws).
+    if (typeof process !== 'undefined' && typeof process.on === 'function') {
       const shutdown = () => {
         _batchRecorder?.flush().catch(() => {});
       };
-      process.on('SIGTERM', shutdown);
-      process.on('SIGINT', shutdown);
-      process.on('beforeExit', shutdown);
+      try {
+        process.on('SIGTERM', shutdown);
+        process.on('SIGINT', shutdown);
+        process.on('beforeExit', shutdown);
+      } catch {
+        // Edge/Workers runtimes may throw on unsupported signals — ignore
+      }
     }
   }
   return _batchRecorder;

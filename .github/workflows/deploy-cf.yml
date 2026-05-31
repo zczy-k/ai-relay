@@ -1,0 +1,205 @@
+name: Deploy to Cloudflare Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify required secrets
+        run: |
+          if [ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]; then
+            echo "❌ Error: CLOUDFLARE_API_TOKEN is not set"
+            echo "Please add it in Settings → Secrets and variables → Actions"
+            echo "Visit: https://github.com/${{ github.repository }}/settings/secrets/actions"
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ]; then
+            echo "❌ Error: CLOUDFLARE_ACCOUNT_ID is not set"
+            echo "Please add it in Settings → Secrets and variables → Actions"
+            echo "Visit: https://github.com/${{ github.repository }}/settings/secrets/actions"
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.RELAY_API_KEY }}" ]; then
+            echo "❌ Error: RELAY_API_KEY is not set"
+            echo "Please add it in Settings → Secrets and variables → Actions"
+            echo "Visit: https://github.com/${{ github.repository }}/settings/secrets/actions"
+            exit 1
+          fi
+
+          echo "✅ All required secrets are configured"
+
+      - name: Provision Cloudflare resources
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+
+          # ─── D1 Database ───────────────────────────────────────────
+          echo "=== Provisioning D1 database ==="
+          DATABASE_ID=$(pnpm exec wrangler d1 list --json | jq -r '.[] | select(.name == "ai-relay") | .uuid' || echo "")
+
+          if [ -z "$DATABASE_ID" ] || [ "$DATABASE_ID" = "null" ]; then
+            echo "Creating D1 database: ai-relay"
+            DATABASE_ID=$(pnpm exec wrangler d1 create ai-relay --json | jq -r '.uuid')
+          else
+            echo "D1 database already exists"
+          fi
+
+          echo "D1 database_id: $DATABASE_ID"
+
+          if [ -z "$DATABASE_ID" ] || [ "$DATABASE_ID" = "null" ]; then
+            echo "❌ Failed to obtain D1 database_id"
+            exit 1
+          fi
+
+          # Inject database_id into wrangler.toml
+          if grep -q "database_id" wrangler.toml; then
+            sed -i "s|database_id = .*|database_id = \"${DATABASE_ID}\"|" wrangler.toml
+          else
+            sed -i "/database_name = \"ai-relay\"/a database_id = \"${DATABASE_ID}\"" wrangler.toml
+          fi
+
+          # ─── KV Namespace ──────────────────────────────────────────
+          echo ""
+          echo "=== Provisioning KV namespace ==="
+
+          # wrangler kv namespace list outputs JSON by default (--json is NOT supported)
+          KV_LIST=$(pnpm exec wrangler kv namespace list 2>/dev/null || echo "[]")
+          echo "KV namespaces found: $(echo "$KV_LIST" | jq 'length' 2>/dev/null || echo 'unknown')"
+
+          # Search for existing namespace — title format is "<worker_name>-<binding>"
+          # Check all possible titles from current and previous workflow versions
+          KV_ID=""
+          for TITLE in "ai-relay-KV" "ai-relay" "ai-relay-ai-relay"; do
+            FOUND=$(echo "$KV_LIST" | jq -r ".[] | select(.title == \"${TITLE}\") | .id" 2>/dev/null || echo "")
+            if [ -n "$FOUND" ] && [ "$FOUND" != "null" ]; then
+              KV_ID="$FOUND"
+              echo "Found existing KV namespace: title=${TITLE}, id=${KV_ID}"
+              break
+            fi
+          done
+
+          if [ -z "$KV_ID" ]; then
+            echo "No existing KV namespace found, creating one..."
+            # Use binding name "KV" → title becomes "ai-relay-KV"
+            KV_OUTPUT=$(pnpm exec wrangler kv namespace create KV 2>&1 || true)
+            echo "$KV_OUTPUT"
+            # Extract id: try JSON first, then regex fallback
+            KV_ID=$(echo "$KV_OUTPUT" | jq -r '.id' 2>/dev/null || echo "")
+            if [ -z "$KV_ID" ] || [ "$KV_ID" = "null" ]; then
+              KV_ID=$(echo "$KV_OUTPUT" | grep -oE '[0-9a-f]{32}' | head -1 || echo "")
+            fi
+          fi
+
+          echo "KV namespace id: $KV_ID"
+
+          if [ -z "$KV_ID" ] || [ "$KV_ID" = "null" ]; then
+            echo "❌ Failed to obtain KV namespace id"
+            echo "Debug: KV list output was:"
+            echo "$KV_LIST" | head -20
+            exit 1
+          fi
+
+          # Inject KV id into wrangler.toml
+          if grep -q "^id = " wrangler.toml; then
+            sed -i "s|^id = .*|id = \"${KV_ID}\"|" wrangler.toml
+          else
+            sed -i "/binding = \"KV\"/a id = \"${KV_ID}\"" wrangler.toml
+          fi
+
+          # ─── Verify ────────────────────────────────────────────────
+          echo ""
+          echo "=== Final wrangler.toml ==="
+          cat wrangler.toml
+
+      - name: Ensure Pages project exists
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          # Create project if it doesn't exist; ignore error if it already does
+          pnpm exec wrangler pages project create ai-relay --production-branch main 2>&1 || true
+
+      - name: Build for Cloudflare Pages
+        run: pnpm exec opennextjs-cloudflare build --dangerouslyUseUnsupportedNextVersion
+        env:
+          NODE_ENV: production
+
+      - name: Adapt Build Output for Cloudflare Pages
+        run: |
+          # Copy static assets to the root of .open-next so they can be served directly by Pages
+          if [ -d ".open-next/assets" ]; then
+            cp -r .open-next/assets/* .open-next/
+          fi
+          # Rename worker.js to _worker.js to enable Pages Functions
+          if [ -f ".open-next/worker.js" ]; then
+            mv .open-next/worker.js .open-next/_worker.js
+          fi
+          # Create _routes.json to tell Cloudflare Pages to serve static files directly from CDN instead of passing them to the worker
+          echo '{"version":1,"include":["/*"],"exclude":["/_next/static/*","/favicon.ico","/*.png","/*.ico","/*.txt","/*.svg"]}' > .open-next/_routes.json
+
+      - name: Apply D1 migrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN}"
+          export CLOUDFLARE_ACCOUNT_ID="${CLOUDFLARE_ACCOUNT_ID}"
+          pnpm exec wrangler d1 migrations apply ai-relay --remote
+
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN}"
+          export CLOUDFLARE_ACCOUNT_ID="${CLOUDFLARE_ACCOUNT_ID}"
+          pnpm exec wrangler pages deploy .open-next --project-name=ai-relay
+
+      - name: Configure environment variables
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN}"
+          export CLOUDFLARE_ACCOUNT_ID="${CLOUDFLARE_ACCOUNT_ID}"
+
+          # Configure required environment variables
+          if [ -n "${{ secrets.RELAY_API_KEY }}" ]; then
+            echo "${{ secrets.RELAY_API_KEY }}" | pnpm exec wrangler pages secret put RELAY_API_KEY --project-name=ai-relay
+          fi
+
+          if [ -n "${{ secrets.RELAY_ADMIN_KEY }}" ]; then
+            echo "${{ secrets.RELAY_ADMIN_KEY }}" | pnpm exec wrangler pages secret put RELAY_ADMIN_KEY --project-name=ai-relay
+          fi
+
+          if [ -n "${{ secrets.RELAY_SIGNING_SECRET }}" ]; then
+            echo "${{ secrets.RELAY_SIGNING_SECRET }}" | pnpm exec wrangler pages secret put RELAY_SIGNING_SECRET --project-name=ai-relay
+          fi
+
+          if [ -n "${{ secrets.CRON_SECRET }}" ]; then
+            echo "${{ secrets.CRON_SECRET }}" | pnpm exec wrangler pages secret put CRON_SECRET --project-name=ai-relay
+          fi

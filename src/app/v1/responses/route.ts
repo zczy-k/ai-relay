@@ -12,13 +12,12 @@
 import { NextRequest } from 'next/server';
 import { validateAuth, relayRequest } from '@/lib/relay';
 import { RelayError } from '@/lib/errors';
-import { KVUsageStorage, createUsageEvent } from '@/lib/usage';
+import { createUsageEvent } from '@/lib/usage';
+import { createUsageStorage } from '@/lib/usage/factory';
 import { recordRequestLog } from '@/lib/observability/request-logs';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
-
-const usageStorage = new KVUsageStorage();
 
 /** Rough chars-per-token estimate for fallback */
 const CHARS_PER_TOKEN = 4;
@@ -105,7 +104,8 @@ function wrapStreamWithUsageTracking(
   model: string,
   startTime: number,
   requestPromptTokens: number,
-  traceId: string
+  traceId: string,
+  usageStorage: import('@/lib/usage/sdk').UsageStorage
 ): ReadableStream<Uint8Array> {
   const reader = upstreamBody.getReader();
   const decoder = new TextDecoder();
@@ -243,6 +243,7 @@ function wrapStreamWithUsageTracking(
  * Routes requests to the appropriate upstream provider based on model prefix.
  */
 export async function POST(request: NextRequest) {
+  const usageStorage = await createUsageStorage();
   const traceId = request.headers.get('x-request-id') || `trace_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   let requestedModel: string | undefined;
 
@@ -358,7 +359,8 @@ export async function POST(request: NextRequest) {
         body.model,
         startTime,
         estimatedPromptTokens,
-        traceId
+        traceId,
+        usageStorage
       );
       return new Response(wrappedBody, {
         status: response.status,

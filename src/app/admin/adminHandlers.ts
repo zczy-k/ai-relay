@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { AdminData } from './types';
 
 interface ProviderFallbacks {
@@ -37,6 +37,10 @@ export function useAdminHandlers(apiKey: string, t: any) {
   // Custom provider modal states
   const [customProviderModalOpen, setCustomProviderModalOpen] = useState(false);
   const [editingCustomProvider, setEditingCustomProvider] = useState<any>(null);
+
+  // Use a ref for t so callbacks don't re-create when translations change
+  const tRef = useRef(t);
+  tRef.current = t;
 
   // Automatically select a default value for the fallback-to-add dropdown when options change
   useEffect(() => {
@@ -110,11 +114,11 @@ export function useAdminHandlers(apiKey: string, t: any) {
       });
       setActiveFallbacks(fallbacksData.fallbacks || []);
     } catch (e) {
-      setConfigMessage({ text: e instanceof Error ? e.message : t.msgLoadConfigFailed, type: 'error' });
+      setConfigMessage({ text: e instanceof Error ? e.message : tRef.current.msgLoadConfigFailed, type: 'error' });
     } finally {
       setOperationLoading(false);
     }
-  }, [apiKey, t]);
+  }, [apiKey]);
 
   useEffect(() => {
     if (selectedProvider && authenticated) {

@@ -5,15 +5,16 @@
 import { NextRequest } from 'next/server';
 import { getKeyPoolStats, initAllKeyPools, getConcurrencyStats } from '@/lib/relay';
 import { getRateLimiterStats } from '@/lib/relay/rate-limiter';
-import { KVUsageStorage } from '@/lib/usage';
+import { createUsageStorage } from '@/lib/usage/factory';
 import { getAllProviders } from '@/lib/providers';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 
-const usageStorage = new KVUsageStorage();
+
 let cachedStatus: { expiresAt: number; response: unknown } | null = null;
 
 export async function GET(request: NextRequest) {
+  const usageStorage = await createUsageStorage();
   const url = new URL(request.url);
   const showDetails = url.searchParams.get('detail') === '1';
 
