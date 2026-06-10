@@ -104,12 +104,38 @@ export async function resolveProvider(model: string): Promise<ProviderConfig | n
     // Priority rules are an admin override. If KV/config is unavailable, fall back to legacy prefix matching.
   }
 
+  const sortedForExact = Object.values(allProviders).sort((a, b) => {
+    const aCustom = a.isCustom ? 1 : 0;
+    const bCustom = b.isCustom ? 1 : 0;
+    return bCustom - aCustom;
+  });
+
+  for (const provider of sortedForExact) {
+    if (provider.models) {
+      for (const m of provider.models) {
+        if (m.id && m.id.toLowerCase() === lowerModel) {
+          return provider;
+        }
+      }
+    }
+  }
+
   for (const provider of Object.values(allProviders)) {
     for (const prefix of provider.modelPrefixes) {
-      if (lowerModel.startsWith(prefix)) {
-        if (prefix.length > longestPrefixLength) {
-          longestPrefixLength = prefix.length;
-          bestProvider = provider;
+      const isWildcard = prefix.endsWith('-') || prefix.endsWith('.') || prefix.endsWith('_');
+      if (isWildcard) {
+        if (lowerModel.startsWith(prefix)) {
+          if (prefix.length > longestPrefixLength) {
+            longestPrefixLength = prefix.length;
+            bestProvider = provider;
+          }
+        }
+      } else {
+        if (lowerModel === prefix) {
+          if (prefix.length > longestPrefixLength) {
+            longestPrefixLength = prefix.length;
+            bestProvider = provider;
+          }
         }
       }
     }

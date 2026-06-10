@@ -8,6 +8,7 @@ import { requireAdminAuth } from '@/lib/admin';
 import { createUsageStorage } from '@/lib/usage/factory';
 import { getUsageSamplingInfo } from '@/lib/usage/storage/kv-storage';
 import { getAllProviders } from '@/lib/providers';
+import { getApiKeyMinLength } from '@/lib/config/env';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -60,6 +61,7 @@ export async function GET(request: NextRequest) {
       envKeyField: config.envKeyField,
       baseUrl: config.baseUrl,
       headerFormat: config.headerFormat,
+      userAgent: config.userAgent,
     };
   });
 
@@ -111,6 +113,7 @@ export async function GET(request: NextRequest) {
       monthlyLimit: parseInt(process.env.RELAY_MONTHLY_LIMIT || '0', 10) || null,
       customDailyLimit: quota.isOverride ? quota.dailyLimit : null,
       customMonthlyLimit: quota.isOverride ? quota.monthlyLimit : null,
+      apiKeyMinLength: getApiKeyMinLength(),
     },
   }, {
     headers: {

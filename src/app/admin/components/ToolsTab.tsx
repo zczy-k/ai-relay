@@ -5,6 +5,7 @@ import TempKeyGenerator from './TempKeyGenerator';
 import ModelKeyTest from './ModelKeyTest';
 import BackupRestore from './BackupRestore';
 import StatsBackupRestore from './StatsBackupRestore';
+import CcSwitchExport from './CcSwitchExport';
 
 interface ToolsTabProps {
   apiKey: string;
@@ -47,6 +48,12 @@ export default function ToolsTab({ apiKey, lang, t, providers, onRefreshData }: 
         lang={lang}
         t={t}
         onRefreshData={onRefreshData}
+      />
+
+      <CcSwitchExport
+        apiKey={apiKey}
+        lang={lang}
+        t={t}
       />
 
       <StatsBackupRestore

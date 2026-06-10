@@ -68,6 +68,19 @@ function mergeLogs(stored: RequestLogEntry[], incoming: RequestLogEntry[], maxEn
   return merged;
 }
 
+function formatRequestTime(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return '-';
+  return new Intl.DateTimeFormat(undefined, {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(date);
+}
+
 // ── Component ──────────────────────────────────────────────
 export default function RequestLogsTab({ t }: Props) {
   const [items, setItems] = useState<RequestLogEntry[]>([]);
@@ -189,11 +202,12 @@ export default function RequestLogsTab({ t }: Props) {
       </div>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-          <thead><tr style={{ color: '#9ca3af', textAlign: 'left' }}><th>Trace</th><th>{t.tblProvider}</th><th>Model</th><th>Status</th><th>HTTP</th><th>Latency</th><th>{t.totalTokens}</th><th>{t.logsErrorDetail}</th></tr></thead>
+          <thead><tr style={{ color: '#9ca3af', textAlign: 'left' }}><th>Trace</th><th>{t.logsRequestTime || 'Time'}</th><th>{t.tblProvider}</th><th>Model</th><th>Status</th><th>HTTP</th><th>Latency</th><th>{t.totalTokens}</th><th>{t.logsErrorDetail}</th></tr></thead>
           <tbody>
             {filtered.map((log) => (
               <tr key={log.traceId} style={{ borderTop: '1px solid rgba(255,255,255,.06)' }}>
                 <td style={{ padding: '0.65rem', color: '#93c5fd', fontFamily: 'monospace' }}>{log.traceId}</td>
+                <td title={log.timestamp} style={{ padding: '0.65rem', whiteSpace: 'nowrap', color: '#d1d5db' }}>{formatRequestTime(log.timestamp)}</td>
                 <td style={{ padding: '0.65rem' }}>{log.provider || '-'}</td><td style={{ padding: '0.65rem' }}>{log.model || '-'}</td>
                 <td style={{ padding: '0.65rem', color: log.status === 'success' ? '#34d399' : '#f87171' }}>{log.status}</td>
                 <td style={{ padding: '0.65rem' }}>{log.httpStatus}</td><td style={{ padding: '0.65rem' }}>{log.latencyMs}ms</td><td style={{ padding: '0.65rem' }}>{log.totalTokens || 0}</td>

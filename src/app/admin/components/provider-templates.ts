@@ -31,6 +31,7 @@ export interface DraftProviderPayload {
   headerFormat: ProviderHeaderFormat;
   modelPrefixes: string[];
   envKeyField: string;
+  userAgent?: string;
   models: Array<{
     id: string;
     displayName: string;
@@ -193,9 +194,11 @@ export function buildDraftProvider(input: {
   baseUrl: string;
   headerFormat: ProviderHeaderFormat;
   modelPrefixesText: string;
+  userAgent?: string;
   models: DraftProviderPayload['models'];
 }): DraftProviderPayload {
   const name = input.id.trim();
+  const userAgent = input.userAgent?.trim();
   return {
     name,
     displayName: input.displayName.trim(),
@@ -203,18 +206,19 @@ export function buildDraftProvider(input: {
     headerFormat: input.headerFormat,
     modelPrefixes: parseModelPrefixes(input.modelPrefixesText),
     envKeyField: buildEnvKeyField(name),
+    userAgent: userAgent || undefined,
     models: input.models,
   };
 }
 
 export const buildDraftProviderFromForm = buildDraftProvider;
 
-export function validateApiKeyInput(apiKey: string): string | null {
+export function validateApiKeyInput(apiKey: string, minLength = 20): string | null {
   const trimmed = apiKey.trim();
   if (!trimmed) {
     return 'missing-api-key';
   }
-  if (trimmed.length < 20) {
+  if (minLength > 0 && trimmed.length < minLength) {
     return 'api-key-too-short';
   }
   if (/\s/.test(trimmed)) {

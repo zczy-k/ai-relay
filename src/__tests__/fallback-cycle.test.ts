@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { detectFallbackCycle, setFallbackChain, clearFallbackChain } from '../lib/admin/admin-config';
+import {
+  deleteCustomProvider,
+  detectFallbackCycle,
+  getFallbackChain,
+  saveCustomProvider,
+  setFallbackChain,
+  clearFallbackChain,
+} from '../lib/admin/admin-config';
 import * as resolver from '../lib/providers';
 import { relayRequest } from '../lib/relay/relay';
 import { PROVIDERS } from '../lib/providers/registry';
@@ -98,6 +105,28 @@ describe('Fallback Circular Dependency Tests', () => {
     });
   });
 
+  describe('deleteCustomProvider cleanup', () => {
+    it('removes references to the deleted provider from other fallback chains', async () => {
+      await saveCustomProvider({
+        name: 'delete_me',
+        displayName: 'Delete Me',
+        baseUrl: 'https://delete-me.example.com/v1',
+        headerFormat: 'openai',
+        envKeyField: 'DELETE_ME_KEYS',
+        modelPrefixes: ['delete-me-'],
+        models: [],
+        isCustom: true,
+      });
+      await setFallbackChain('openai', ['delete_me:gpt-test', 'anthropic']);
+      await setFallbackChain('anthropic', ['delete_me']);
+
+      await deleteCustomProvider('delete_me');
+
+      await expect(getFallbackChain('openai')).resolves.toEqual(['anthropic']);
+      await expect(getFallbackChain('anthropic', ['openai'])).resolves.toEqual(['openai']);
+    });
+  });
+
   describe('Static registry verification', () => {
     it('should ensure there are no cycles in the default static registry configurations', async () => {
       // Restore actual resolver behavior for this test to test real code configuration
@@ -116,6 +145,56 @@ describe('Fallback Circular Dependency Tests', () => {
   });
 
   describe('Runtime fallback loop prevention', () => {
+    it('returns a 504 timeout without attempting fallback providers', async () => {
+      vi.useFakeTimers();
+      try {
+        vi.stubEnv('OPENAI_KEYS', 'openai_key');
+        vi.stubEnv('CLAUDE_KEYS', 'claude_key');
+        vi.stubEnv('RELAY_UPSTREAM_TIMEOUT_MS', '1000');
+
+        const fetchMock = vi.fn((_url, init?: RequestInit) => new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            const err = new Error('The operation was aborted');
+            err.name = 'AbortError';
+            reject(err);
+          });
+        }));
+        global.fetch = fetchMock as any;
+
+        const keyPoolMod = await import('../lib/relay/key-pool');
+        vi.spyOn(keyPoolMod, 'selectKey')
+          .mockResolvedValueOnce({ hash: 'openai_hash', key: 'openai_key', provider: 'openai' } as any)
+          .mockResolvedValueOnce({ hash: 'anthropic_hash', key: 'claude_key', provider: 'anthropic' } as any);
+        vi.spyOn(keyPoolMod, 'getKeyPool').mockResolvedValue({
+          provider: 'openai',
+          keys: [{ hash: 'openai_hash', key: 'openai_key', provider: 'openai' }],
+          counter: 0,
+        } as any);
+
+        const configMod = await import('../lib/admin/admin-config');
+        vi.spyOn(configMod, 'getFallbackChain').mockResolvedValue(['anthropic']);
+
+        const promise = relayRequest({
+          model: 'gpt-6-preview',
+          messages: [{ role: 'user', content: 'test' }],
+        });
+
+        const assertion = expect(promise).rejects.toMatchObject({
+          name: 'RelayError',
+          status: 504,
+          type: 'upstream_error',
+        });
+
+        await vi.advanceTimersByTimeAsync(1000);
+
+        await assertion;
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(String(fetchMock.mock.calls[0][0])).toContain('openai.com');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('should prevent attempting a provider more than once in relayRequest', async () => {
       // Mock global fetch to fail so it rolls through fallbacks
       const fetchMock = vi.fn().mockResolvedValue({

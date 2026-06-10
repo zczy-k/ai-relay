@@ -13,7 +13,6 @@
 
 import type { UsageStorage, UsageEvent } from '../sdk';
 import { getUsageSamplingInfo, shouldSample } from './kv-storage';
-import { isCloudflare } from '@/lib/cf-env';
 
 const MAX_BATCH_SIZE = 100;
 const FLUSH_INTERVAL_MS = 60_000;
@@ -27,9 +26,10 @@ interface PendingEntry {
 
 export class BatchUsageRecorder {
   private pending = new Map<string, PendingEntry>();
-  private errorPending = new Map<string, { count: number; reason: string }>();
+  private errorPending = new Map<string, { count: number; reason: string; keyHash: string; provider: string; statusCode: number }>();
   private flushTimer: ReturnType<typeof setInterval> | null = null;
   private storage: UsageStorage | null = null;
+  private shouldRecordDirect = false;
   private totalPending = 0;
   private destroyed = false;
   private flushing = false;
@@ -39,6 +39,7 @@ export class BatchUsageRecorder {
    */
   setStorage(storage: UsageStorage): void {
     this.storage = storage;
+    this.shouldRecordDirect = (storage as { shouldRecordDirect?: boolean }).shouldRecordDirect === true;
   }
 
   /**
@@ -51,8 +52,8 @@ export class BatchUsageRecorder {
   async record(event: UsageEvent): Promise<void> {
     if (this.destroyed) return;
 
-    // Cloudflare Workers: bypass memory buffer, write directly to D1
-    if (await isCloudflare()) {
+    // Cloudflare D1 writes must complete within the request lifecycle.
+    if (this.shouldRecordDirect) {
       if (this.storage) {
         await this.storage.record(event);
       }
@@ -109,7 +110,7 @@ export class BatchUsageRecorder {
   }): void {
     if (this.destroyed) return;
 
-    const key = `error:${event.provider}:${event.statusCode}`;
+    const key = `error:${event.provider}:${event.statusCode}:${event.keyHash}`;
     const existing = this.errorPending.get(key);
     if (existing) {
       existing.count++;
@@ -118,6 +119,9 @@ export class BatchUsageRecorder {
       this.errorPending.set(key, {
         count: 1,
         reason: event.reason.slice(0, 200),
+        keyHash: event.keyHash,
+        provider: event.provider,
+        statusCode: event.statusCode,
       });
     }
   }
@@ -180,19 +184,16 @@ export class BatchUsageRecorder {
 
     // Flush error data
     const errorPromises: Promise<void>[] = [];
-    for (const [key, entry] of errorEntries) {
-      const parts = key.split(':');
-      if (parts.length >= 3) {
-        errorPromises.push(
-          this.storage.recordErrorDirect({
-            provider: parts[1],
-            keyHash: 'batch',
-            statusCode: Number(parts[2]),
-            reason: entry.reason,
-            count: entry.count,
-          })
-        );
-      }
+    for (const [, entry] of errorEntries) {
+      errorPromises.push(
+        this.storage.recordErrorDirect({
+          provider: entry.provider,
+          keyHash: entry.keyHash,
+          statusCode: entry.statusCode,
+          reason: entry.reason,
+          count: entry.count,
+        })
+      );
     }
 
       await Promise.allSettled([...usagePromises, ...errorPromises]);

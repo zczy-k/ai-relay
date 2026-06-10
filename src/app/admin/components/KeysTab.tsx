@@ -45,7 +45,9 @@ interface KeysTabProps {
   onSaveCustomProvider: (provider: any) => Promise<void>;
   onTestCustomProvider: (provider: any, apiKeyValue: string, modelId?: string) => Promise<any>;
   onFetchProviderModels: (provider: any, apiKeyValue: string) => Promise<{ models: any[] }>;
+  onImportProviderLink?: (link: string) => Promise<boolean>;
   onDeleteCustomProvider: (name: string) => Promise<void>;
+  apiKey: string;
 }
 
 export default function KeysTab(props: KeysTabProps) {
@@ -82,7 +84,9 @@ export default function KeysTab(props: KeysTabProps) {
     onSaveCustomProvider,
     onTestCustomProvider,
     onFetchProviderModels,
+    onImportProviderLink,
     onDeleteCustomProvider,
+    apiKey,
   } = props;
 
   return (
@@ -136,12 +140,52 @@ export default function KeysTab(props: KeysTabProps) {
         }
       `}} />
 
+      {configMessage && !selectedProvider && (
+        <div style={{
+          padding: '0.75rem 1rem',
+          borderRadius: '8px',
+          fontSize: '0.9rem',
+          border: configMessage.type === 'success' ? '1px solid rgba(16, 185, 129, 0.2)' : '1px solid rgba(239, 68, 68, 0.2)',
+          backgroundColor: configMessage.type === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+          color: configMessage.type === 'success' ? '#34d399' : '#fca5a5',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: '0.75rem',
+          animation: 'slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+        }}>
+          <span style={{
+            minWidth: 0,
+            maxHeight: '8rem',
+            overflowY: 'auto',
+            overflowWrap: 'anywhere',
+            wordBreak: 'break-word',
+            whiteSpace: 'pre-wrap',
+            lineHeight: 1.45,
+          }}>{configMessage.text}</span>
+          <button
+            onClick={() => setConfigMessage(null)}
+            style={{
+              background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '1.2rem', padding: '0 0.5rem',
+              lineHeight: 1,
+              flexShrink: 0,
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       <ProviderTable
         data={data}
         selectedProvider={selectedProvider}
         setSelectedProvider={setSelectedProvider}
         setEditingCustomProvider={setEditingCustomProvider}
         setCustomProviderModalOpen={setCustomProviderModalOpen}
+        onImportProviderLink={onImportProviderLink}
+        operationLoading={operationLoading}
+        apiKey={apiKey}
+        lang={lang}
         t={t}
       />
 
@@ -187,6 +231,7 @@ export default function KeysTab(props: KeysTabProps) {
         onSaveCustomProvider={onSaveCustomProvider}
         onTestCustomProvider={onTestCustomProvider}
         onFetchProviderModels={onFetchProviderModels}
+        providerKeys={providerKeys}
       />
     </div>
   );

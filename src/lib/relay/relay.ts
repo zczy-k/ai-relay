@@ -37,6 +37,101 @@ async function getErrorStorage() {
 
 type RelayApiType = 'chat' | 'responses' | 'anthropicMessages';
 type RelayRequestBody = ChatCompletionRequest | ResponsesAPIRequest | AnthropicMessagesRequest;
+const BROWSER_COMPAT_USER_AGENTS = [
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36',
+  'Mozilla/5.0',
+];
+const DEFAULT_UPSTREAM_TIMEOUT_MS = 50_000;
+
+class UpstreamTimeoutError extends Error {
+  public readonly timeoutMs: number;
+
+  constructor(timeoutMs: number) {
+    super(`Upstream request timed out after ${timeoutMs}ms`);
+    this.name = 'UpstreamTimeoutError';
+    this.timeoutMs = timeoutMs;
+  }
+}
+
+function getUpstreamTimeoutMs(): number {
+  const raw = process.env.RELAY_UPSTREAM_TIMEOUT_MS;
+  if (raw === undefined || raw.trim() === '') return DEFAULT_UPSTREAM_TIMEOUT_MS;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return DEFAULT_UPSTREAM_TIMEOUT_MS;
+  if (parsed <= 0) return 0;
+  return Math.max(1_000, Math.floor(parsed));
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
+function getUserAgentCandidates(provider: ProviderConfig): Array<string | undefined> {
+  const candidates: Array<string | undefined> = [
+    provider.userAgent?.trim() || undefined,
+    undefined,
+    ...BROWSER_COMPAT_USER_AGENTS,
+  ];
+  const seen = new Set<string>();
+  return candidates.filter((candidate) => {
+    const key = candidate || '__client_or_default_sdk__';
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function shouldRetryWithAlternateUserAgent(response: Response): boolean {
+  return (response.headers.get('content-type') || '').includes('text/html');
+}
+
+async function fetchUpstreamWithUserAgentCandidates(input: {
+  provider: ProviderConfig;
+  apiKey: string;
+  isStream: boolean;
+  clientUserAgent?: string;
+  url: string;
+  body: unknown;
+}): Promise<Response> {
+  const payload = JSON.stringify(input.body);
+  let lastResponse: Response | null = null;
+  const timeoutMs = getUpstreamTimeoutMs();
+
+  for (const customUserAgent of getUserAgentCandidates(input.provider)) {
+    const controller = timeoutMs > 0 ? new AbortController() : null;
+    let timedOut = false;
+    const timer = controller
+      ? setTimeout(() => {
+          timedOut = true;
+          controller.abort();
+        }, timeoutMs)
+      : null;
+
+    let response: Response;
+    try {
+      response = await fetch(input.url, {
+        method: 'POST',
+        headers: buildHeaders(input.provider.headerFormat, input.apiKey, input.isStream, input.clientUserAgent, customUserAgent),
+        body: payload,
+        signal: controller?.signal,
+      });
+    } catch (error) {
+      if (timedOut || isAbortError(error)) {
+        throw new UpstreamTimeoutError(timeoutMs);
+      }
+      throw error;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+
+    lastResponse = response;
+    if (!shouldRetryWithAlternateUserAgent(response)) {
+      return response;
+    }
+  }
+
+  return lastResponse!;
+}
 
 /**
  * Record an upstream error to KV for admin dashboard tracking.
@@ -63,7 +158,8 @@ function recordError(
  */
 export async function relayRequest(
   body: RelayRequestBody,
-  apiType: RelayApiType = 'chat'
+  apiType: RelayApiType = 'chat',
+  userAgent?: string
 ): Promise<RelayResult> {
   const provider = await resolveProvider(body.model);
   if (!provider) {
@@ -140,7 +236,7 @@ export async function relayRequest(
 
       // Try primary provider with retries (with concurrency control)
       primaryResult = await withConcurrency(
-        () => tryProviderWithRetries(effectiveProvider, body, apiKey, maxRetries, apiType, smartRoutingConfigured)
+        () => tryProviderWithRetries(effectiveProvider, body, apiKey, maxRetries, apiType, smartRoutingConfigured, userAgent)
       );
       if (primaryResult.result) {
         return primaryResult.result;
@@ -208,7 +304,7 @@ export async function relayRequest(
     }
 
     const fbResult = await withConcurrency(
-      () => tryProviderWithRetries(fbProvider, fbBody, fbKey, fbMaxRetries, apiType, smartRoutingConfigured)
+      () => tryProviderWithRetries(fbProvider, fbBody, fbKey, fbMaxRetries, apiType, smartRoutingConfigured, userAgent)
     );
     if (fbResult.result) {
       return fbResult.result;
@@ -234,7 +330,8 @@ async function tryProviderWithRetries(
   initialKey: ApiKey | null,
   maxRetries: number,
   apiType: RelayApiType = 'chat',
-  smartRoutingConfigured = false
+  smartRoutingConfigured = false,
+  userAgent?: string
 ): Promise<{ result: RelayResult | null; lastError: Error | null }> {
   let currentKey = initialKey;
   let lastError: Error | null = null;
@@ -293,10 +390,13 @@ async function tryProviderWithRetries(
       break;
     }
     try {
-      const upstreamResponse = await fetch(url, {
-        method: 'POST',
-        headers: buildHeaders(provider.headerFormat, currentKey.key, !!body.stream),
-        body: JSON.stringify(requestBody),
+      const upstreamResponse = await fetchUpstreamWithUserAgentCandidates({
+        provider,
+        apiKey: currentKey.key,
+        isStream: !!body.stream,
+        clientUserAgent: userAgent,
+        url,
+        body: requestBody,
       });
 
       const latencyMs = Date.now() - startTime;
@@ -358,6 +458,17 @@ async function tryProviderWithRetries(
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       if (smartRoutingConfigured) recordProviderResult(provider.name, false, Date.now() - startTime);
+      if (error instanceof UpstreamTimeoutError) {
+        if (currentKey) {
+          markCooldown(currentKey);
+          await recordError(provider.name, currentKey.hash, 504, `Upstream timeout after ${error.timeoutMs}ms`);
+        }
+        throw new RelayError(
+          `${provider.displayName} timed out after ${error.timeoutMs}ms while waiting for upstream response.`,
+          'upstream_error',
+          504
+        );
+      }
       if (currentKey) {
         await markCooldown(currentKey);
         const nextKey = await selectKey(provider);

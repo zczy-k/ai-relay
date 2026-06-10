@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { AdminData } from './types';
+import { buildImportedProviderConfig, parseProviderImportLink } from './provider-import';
 
 interface ProviderFallbacks {
   current: string[];
@@ -485,6 +486,77 @@ export function useAdminHandlers(apiKey: string, t: any) {
     }
   }, [apiKey, t, fetchData]);
 
+  const handleImportProviderLink = useCallback(async (link: string): Promise<boolean> => {
+    setOperationLoading(true);
+    setConfigMessage(null);
+
+    try {
+      const payload = parseProviderImportLink(link);
+      const providers = data?.providers || [];
+      const baseProviderConfig = buildImportedProviderConfig({ payload, providers });
+      let discoveredModels: any[] = [];
+
+      try {
+        const modelsRes = await fetch('/api/admin/providers/models', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            key: payload.apiKey,
+            providerConfig: baseProviderConfig,
+          }),
+        });
+        const modelsData = await modelsRes.json();
+        if (!modelsRes.ok) {
+          throw new Error(modelsData.error?.message || 'Failed to fetch provider models');
+        }
+        if (!Array.isArray(modelsData.models) || modelsData.models.length === 0) {
+          throw new Error('No models were returned by the provider');
+        }
+        discoveredModels = modelsData.models;
+        if (typeof modelsData.baseUrl === 'string' && modelsData.baseUrl) {
+          payload.baseUrl = modelsData.baseUrl;
+        }
+        if (Object.prototype.hasOwnProperty.call(modelsData, 'userAgent')) {
+          payload.userAgent = typeof modelsData.userAgent === 'string' && modelsData.userAgent.trim()
+            ? modelsData.userAgent.trim()
+            : null;
+        }
+      } catch (err) {
+        throw new Error(err instanceof Error ? err.message : 'Failed to fetch provider models');
+      }
+
+      const providerConfig = buildImportedProviderConfig({
+        payload,
+        providers,
+        models: discoveredModels,
+      });
+
+      setEditingCustomProvider({
+        ...providerConfig,
+        id: providerConfig.name,
+        apiKey: payload.apiKey,
+        keyCount: 0,
+        isImportDraft: true,
+      });
+      setCustomProviderModalOpen(true);
+
+      const successTemplate = tRef.current.msgProviderImportReady || 'Provider form filled: {provider}. Models: {count}. Review and save to add it.';
+      const text = successTemplate.replace('{provider}', providerConfig.displayName).replace('{count}', String(discoveredModels.length));
+      setConfigMessage({ text, type: 'success' });
+      return true;
+    } catch (e) {
+      const messageKey = e instanceof Error ? e.message : 'import-provider-failed';
+      const mapped = tRef.current.providerImportErrors?.[messageKey] || (e instanceof Error ? e.message : tRef.current.alertSaveProviderFailed);
+      setConfigMessage({ text: mapped, type: 'error' });
+      return false;
+    } finally {
+      setOperationLoading(false);
+    }
+  }, [apiKey, data?.providers, fetchData, fetchProviderConfig]);
+
   const handleDeleteCustomProvider = useCallback(async (name: string) => {
     if (!confirm(t.deleteCustomProviderConfirm)) return;
     setOperationLoading(true);
@@ -546,6 +618,7 @@ export function useAdminHandlers(apiKey: string, t: any) {
     handleTestCustomProvider,
     handleFetchProviderModels,
     handleSaveCustomProvider,
+    handleImportProviderLink,
     handleDeleteCustomProvider,
   };
 }

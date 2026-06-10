@@ -5,7 +5,7 @@
 import { withTimeout } from '@/lib/utils/timeout';
 import { getAllProviders } from '@/lib/providers';
 import type { TrendPoint } from '@/lib/usage';
-import { getCFEnv } from '@/lib/cf-env';
+import { getCFEnvSync, getCFEnv } from '@/lib/cf-env';
 
 export interface UsageDailyReport {
   date: string;
@@ -38,7 +38,7 @@ async function getKV() {
   const g = global as any;
 
   // Cloudflare Pages: use CF KV binding via CFKVAdapter
-  const cfEnv = await getCFEnv();
+  const cfEnv = getCFEnvSync() || await getCFEnv();
   if (cfEnv?.KV) {
     try {
       const { CFKVAdapter } = await import('@/lib/admin/cf-kv-adapter');

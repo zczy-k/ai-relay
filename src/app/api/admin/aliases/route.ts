@@ -41,7 +41,13 @@ async function isRegisteredModel(target: string): Promise<boolean> {
   const providers = await getAllProviders(true);
   return Object.values(providers).some((provider) => {
     if (provider.models?.some((model) => model.id.toLowerCase() === lower)) return true;
-    return provider.modelPrefixes.some((prefix) => lower.startsWith(prefix));
+    return provider.modelPrefixes.some((prefix) => {
+      const isWildcard = prefix.endsWith('-') || prefix.endsWith('.') || prefix.endsWith('_');
+      if (isWildcard) {
+        return lower.startsWith(prefix);
+      }
+      return lower === prefix;
+    });
   });
 }
 

@@ -7,10 +7,10 @@
 import { KVUsageStorage } from './storage/kv-storage';
 import { D1UsageStorage } from './storage/d1-usage-storage';
 import type { UsageStorage } from './sdk';
-import { getCFEnv } from '@/lib/cf-env';
+import { getCFEnvSync, getCFEnv } from '@/lib/cf-env';
 
 export async function createUsageStorage(): Promise<UsageStorage> {
-  const cfEnv = await getCFEnv();
+  const cfEnv = getCFEnvSync() || await getCFEnv();
   if (cfEnv?.DB) {
     return new D1UsageStorage(cfEnv.DB);
   }

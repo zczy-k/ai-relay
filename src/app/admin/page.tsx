@@ -15,6 +15,7 @@ import ModelAliasesTab from './components/ModelAliasesTab';
 import PriorityRulesTab from './components/PriorityRulesTab';
 import SecurityTab from './components/SecurityTab';
 import RoutingTab from './components/RoutingTab';
+import CcSwitchImportButton from './components/CcSwitchImportButton';
 import { ErrorDetailPanel } from '../components/ErrorDetailPanel';
 import { BottomNav, type TabId } from '../components/BottomNav';
 import type { AdminData, PriorityRule, PriorityRuleConflict } from './types';
@@ -62,6 +63,7 @@ export default function AdminPage() {
     handleTestCustomProvider,
     handleFetchProviderModels,
     handleSaveCustomProvider,
+    handleImportProviderLink,
     handleDeleteCustomProvider,
   } = useAdminHandlers(apiKey, t);
 
@@ -431,6 +433,12 @@ export default function AdminPage() {
           >
             {t.navHome}
           </Link>
+          <CcSwitchImportButton
+            apiKey={apiKey}
+            lang={lang}
+            t={t}
+            mode="relay"
+          />
           <button
             onClick={() => handleSetLang(lang === 'zh' ? 'en' : 'zh')}
             style={{
@@ -609,7 +617,9 @@ export default function AdminPage() {
             onSaveCustomProvider={handleSaveCustomProvider}
             onTestCustomProvider={handleTestCustomProvider}
             onFetchProviderModels={handleFetchProviderModels}
+            onImportProviderLink={handleImportProviderLink}
             onDeleteCustomProvider={handleDeleteCustomProvider}
+            apiKey={apiKey}
           />
         )}
         {activeTab === 'models' && (

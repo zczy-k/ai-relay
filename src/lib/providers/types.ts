@@ -14,6 +14,7 @@ export interface ProviderConfig {
   headerFormat: 'openai' | 'anthropic' | 'azure';  // Auth header format
   envKeyField: string;             // Env var name for API keys
   envBaseUrlField?: string;        // Env var name for custom base URL
+  userAgent?: string;              // Optional custom User-Agent (overrides default)
   models?: ModelInfo[];            // Supported models list
   modelMapping?: Record<string, string>; // User-facing model ID → upstream model ID (for virtual model names)
   fallbackProvider?: string;       // Fallback provider name when this one fails (single, legacy)

@@ -15,6 +15,7 @@ import { RelayError } from '@/lib/errors';
 import { createUsageEvent } from '@/lib/usage';
 import { createUsageStorage } from '@/lib/usage/factory';
 import { recordRequestLog } from '@/lib/observability/request-logs';
+import { chunkHasUsage, jsonStringFieldLength } from '@/lib/usage/stream-usage';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -27,6 +28,10 @@ const CHARS_PER_TOKEN = 4;
  */
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / CHARS_PER_TOKEN);
+}
+
+function estimateTokensFromChars(charCount: number): number {
+  return Math.ceil(charCount / CHARS_PER_TOKEN);
 }
 
 /**
@@ -111,7 +116,7 @@ function wrapStreamWithUsageTracking(
   const decoder = new TextDecoder();
   let buffer = '';
   let lastUsage: { prompt_tokens?: number; completion_tokens?: number; input_tokens?: number; output_tokens?: number } | null = null;
-  let accumulatedContent = '';
+  let accumulatedContentChars = 0;
   let recorded = false;
 
   async function recordUsage(promptTokens: number, completionTokens: number): Promise<void> {
@@ -182,9 +187,8 @@ function wrapStreamWithUsageTracking(
             const prompt = lastUsage.prompt_tokens ?? lastUsage.input_tokens ?? requestPromptTokens;
             const completion = lastUsage.completion_tokens ?? lastUsage.output_tokens ?? 0;
             await recordUsage(prompt, completion);
-          } else if (accumulatedContent) {
-            const estimatedCompletion = estimateTokens(accumulatedContent);
-            await recordUsage(requestPromptTokens, estimatedCompletion);
+          } else if (accumulatedContentChars > 0) {
+            await recordUsage(requestPromptTokens, estimateTokensFromChars(accumulatedContentChars));
           }
         } catch (e) {
           console.error('[Usage] streaming recordUsage failed:', e);
@@ -207,17 +211,24 @@ function wrapStreamWithUsageTracking(
         if (trimmed.startsWith('data: ')) {
           const data = trimmed.slice(6).trim();
           if (data === '[DONE]') continue;
+
+          // Fast path: response.output_text.delta chunks (the bulk of a large
+          // generation) never carry token usage. Skip JSON.parse and measure
+          // the delta length with a substring scan to stay under Cloudflare's
+          // CPU-time budget. Usage lives only in chunks with a *_tokens field.
+          if (!chunkHasUsage(data)) {
+            if (!lastUsage) {
+              accumulatedContentChars += jsonStringFieldLength(data, 'delta');
+            }
+            continue;
+          }
+
           try {
             const parsed = JSON.parse(data);
 
             // Responses API usage fields
             if (parsed.usage) {
               lastUsage = parsed.usage;
-            }
-
-            // Accumulate content from output text deltas
-            if (parsed.type === 'response.output_text.delta' && typeof parsed.delta === 'string') {
-              accumulatedContent += parsed.delta;
             }
 
             // Also handle response.completed which may have final usage
@@ -243,7 +254,6 @@ function wrapStreamWithUsageTracking(
  * Routes requests to the appropriate upstream provider based on model prefix.
  */
 export async function POST(request: NextRequest) {
-  const usageStorage = await createUsageStorage();
   const traceId = request.headers.get('x-request-id') || `trace_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   let requestedModel: string | undefined;
 
@@ -260,6 +270,8 @@ export async function POST(request: NextRequest) {
       { status: 401, headers: { 'Content-Type': 'application/json' } }
     );
   }
+
+  const usageStorage = await createUsageStorage();
 
   // 2. Parse request body
   let body;
@@ -347,7 +359,8 @@ export async function POST(request: NextRequest) {
   // 4. Relay the request
   try {
     const startTime = Date.now();
-    const { response, provider, apiKey } = await relayRequest(body, 'responses');
+    const userAgent = request.headers.get('user-agent') || undefined;
+    const { response, provider, apiKey } = await relayRequest(body, 'responses', userAgent);
     const latencyMs = Date.now() - startTime;
 
     // 5. Stream or return the response

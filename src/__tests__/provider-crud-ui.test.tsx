@@ -76,7 +76,7 @@ describe('iteration one provider CRUD UI helpers', () => {
           providers: [],
           usage: { requests: 0, tokens: 0, promptTokens: 0, completionTokens: 0, providers: {} },
           quota: { daily: { used: 0, limit: 0 }, monthly: { used: 0, limit: 0 }, allowed: true, isOverride: false },
-          config: { dailyLimit: null, monthlyLimit: null },
+          config: { dailyLimit: null, monthlyLimit: null, apiKeyMinLength: 20 },
         }}
         lang="zh"
         t={{
@@ -129,6 +129,8 @@ describe('iteration one provider CRUD UI helpers', () => {
     expect(html).toContain('从供应商拉取');
     expect(html).toContain('供应商支持的模型');
     expect(html).toContain('一键添加全部');
+    expect(html).toContain('取消全部');
+    expect(html).toContain('一键删除全部');
     expect(html).not.toContain('复用现有模型');
     expect(html).toContain('overscroll-behavior:contain');
     expect(html).toContain('touch-action:pan-y');

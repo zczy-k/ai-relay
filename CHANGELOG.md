@@ -8,6 +8,100 @@
 
 （暂无）
 
+## [2.12.0] - 2026-06-08
+
+### Added
+- **CcSwitch 深度链接导出**：支持将 Provider 配置导出为 CcSwitch 兼容的深度链接格式，方便在 Cherry Studio 等客户端中一键导入。
+- **NewAPI 频道连接 JSON 导入**：支持导入 NewAPI 的频道连接 JSON 格式，拓宽数据源兼容性。
+- **上游请求超时配置**：新增 `RELAY_UPSTREAM_TIMEOUT_MS` 环境变量，支持自定义上游 Provider 请求超时时间，避免长时间挂起。
+
+### Changed
+- **发版流程规范化**：新增 pre-release CI 工作流与发版流程文档（`docs/RELEASE-FLOW.md`）。
+
+## [2.11.1] - 2026-06-07
+
+### Added
+- **FAQ 文档**：新增常见问题文档 `docs/FAQ.md`，并在 README 中添加链接，方便用户自助排查问题。
+
+### Fixed
+- **Cloudflare 部署锚点导航**：修复 Cloudflare 部署详情 `<details>` 标签缺少 id 属性导致锚点链接无法跳转的问题。
+
+### Changed
+- **CI 手动触发部署**：启用 Cloudflare Pages 工作流的手动触发功能（`workflow_dispatch`）。
+
+## [2.11.0] - 2026-06-04
+
+### Added
+- **Cherry Studio 链接导入 Provider**：支持通过 Cherry Studio 链接一键导入 Provider 配置，简化多 Provider 管理流程。
+- **已有 Key 选择支持**：自定义 Provider 编辑弹窗中支持选择已有 API Key，无需重复输入。
+- **Key 数量指示器**：Provider 编辑 UX 优化，展示当前 Key 数量便于管理。
+- **Provider 自定义 User-Agent**：支持为每个 Provider 单独配置 User-Agent，避免上游服务商因默认 SDK 标识而封禁请求。
+- **Provider 默认模型测试**：API Key 测试时自动使用 Provider 特定的默认模型。
+- **精确模型优先级路由**：支持精确匹配模型名称的优先级路由，以及 Hash Key 解析。
+- **Provider 导入暂存草稿**：导入 Provider 配置时先暂存为草稿，确认后再保存。
+- **模型批量删除**：支持批量移除模型列表，提升管理效率。
+- **User-Agent 透传与清理**：将客户端 User-Agent 透传至上游 Provider，清理 fallback 引用中的冗余字段。
+
+### Fixed
+- **上游请求重试与 User-Agent 兼容**：上游请求失败时使用浏览器兼容的 User-Agent 重试。
+- **Provider Key 测试重试与错误处理**：改进 Key 测试的重试逻辑和错误消息展示。
+- **NewAPI 导入 Base URL 与模型发现回退**：修复 NewAPI 导入时的 Base URL 拼接和模型发现 fallback 逻辑。
+- **UI 错误消息展示**：改进上游返回 HTML 响应时的错误消息展示与摘要处理。
+
+## [2.10.0] - 2026-06-03
+
+### Added
+- **可配置 API Key 最小长度**：新增 `RELAY_API_KEY_MIN_LENGTH` 环境变量，支持自定义 API Key 最小长度要求。
+- **客户端 User-Agent 透传**：将客户端 User-Agent 转发至上游 Provider，提升请求兼容性。
+
+### Changed
+- **流式用量跟踪性能优化**：跳过流式传输中的逐 chunk JSON.parse，降低 CPU 开销。
+
+### Fixed
+- **D1 UUID 恢复**：修复重新部署时 D1 数据库已存在导致的 UUID 恢复问题。
+- **KV Namespace ID 恢复**：修复重新部署时 KV namespace title 已存在导致的 ID 恢复问题。
+- **上游 User-Agent 清理**：清理上游请求中的 User-Agent，避免 Provider 因 SDK 标识而封禁。
+- **中性 SDK User-Agent 默认值**：默认 User-Agent 不再暴露 Relay 身份。
+- **上游非 JSON 响应解析**：改进 Provider Key 测试时对非 JSON 响应体的错误解析。
+
+## [2.9.0] - 2026-06-01
+
+### Added
+- **D1 per-key 错误统计**：新增每个 API Key 的错误统计功能，通过 D1 数据库记录各 Key 的错误详情，便于定位问题 Key。
+
+### Changed
+- **Vercel 部署跳过 Cloudflare 上下文**：Vercel 环境不再加载 Cloudflare 上下文，避免不必要的环境检测开销。
+- **同步化 Cloudflare 环境访问**：重构 CF 环境检测逻辑为同步模式，优化静态路由预渲染，提升 Cloudflare Pages 部署性能。
+- **重构部署脚本**：优化 GitHub Actions 部署工作流的 node 脚本部分。
+
+### Fixed
+- **Cloudflare 异步 fallback 兼容**：修复 Admin 配置和报表存储模块的 CF 环境解析，支持异步 fallback 机制。
+
+## [2.8.0] - 2026-05-31
+
+### Added
+- **Cloudflare Pages 全自动部署**：支持通过 GitHub Actions 一键部署到 Cloudflare Pages，自动完成 D1 数据库创建、KV namespace 创建、D1 migrations 执行、环境变量配置和资源绑定，无需手动操作。
+- **Cloudflare D1 + KV 存储**：CF 部署使用 Cloudflare D1（用量统计）+ KV（配置数据），自动检测 CF 环境并切换存储后端。
+- **Cloudflare Cron 定时任务**：通过 CF Pages Cron Triggers + `worker.ts` 的 `scheduled()` handler 执行健康探测和用量聚合，支持 `DEPLOY_URL` 变量配置。
+- **`_routes.json` CDN 静态资源路由**：CF 部署自动生成 `_routes.json`，静态资源直接从 CDN 边缘节点分发，减少 Worker 调用。
+- **Scheduled GitHub Actions Workflow**：新增定时 GitHub Actions 工作流，定期执行 Provider 健康探测和用量聚合请求。
+- **Favicon 迁移与 Metadata 配置**：favicon 迁移至 `public/` 目录，更新 metadata 配置以适配 CF Pages 部署。
+- **CF 环境感知 Setup UI**：Admin 后台自动检测 Cloudflare 环境，展示平台专属配置界面。
+
+### Changed
+- **升级至 Next.js 15 + React 19**：全面升级框架版本，使用 `@opennextjs/cloudflare` 替代已废弃的 `@cloudflare/next-on-pages` 构建方案。(#18)
+- **CF Secret 部署重构**：Cloudflare Pages secret 部署改为动态同步模式，自动从 GitHub Secrets 或 Project Vars 同步所有环境变量。
+- **KV 操作并行化**：Admin 配置中 Key 和 Fallback 恢复的 KV 操作改为并行执行，提升加载性能。
+- **用量存储初始化异步化**：使用存储初始化和 CF 环境检测改为异步模式，适配可靠异步上下文。
+- **KV 不可用容错优化**：KV 未配置时改为抛出错误而非返回空备份数据，提升错误可诊断性。
+
+### Fixed
+- **无限 Keys 拉取 Bug**：修复 Key 池获取时可能出现的无限循环问题。
+- **CF 环境日报为空**：修复 Cloudflare 部署环境下每日用量报告数据为空的问题。
+- **KV 服务不可用韧性**：改善 KV 服务不可用时的容错能力，增加 CF 专属 UI 回退展示。
+- **Key Recorder 失败问题**：修复 Key 记录器在特定场景下的失败问题。
+- **CF 部署工作流稳定性**：修复 wrangler KV namespace 查找、D1/KV 资源配置、sed 命令转义等多个 CI 工作流问题。(#16, #17)
+
 ## [2.7.0] - 2026-05-29
 
 ### Added

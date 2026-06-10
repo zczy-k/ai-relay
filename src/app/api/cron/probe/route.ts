@@ -41,7 +41,7 @@ async function probeProvider(provider: ProviderConfig): Promise<{
   try {
     const res = await fetch(`${provider.baseUrl.replace(/\/$/, '')}/models`, {
       method: 'GET',
-      headers: buildHeaders(provider.headerFormat, key.key, false),
+      headers: buildHeaders(provider.headerFormat, key.key, false, undefined, provider.userAgent),
       signal: controller.signal,
     });
     const responseTimeMs = Date.now() - started;

@@ -3,6 +3,9 @@
 <!-- 简要描述这个 PR 做了什么 -->
 <!-- Briefly describe what this PR does -->
 
+> 维护者提示：提交到上游仓库时，常规变更请以 `pre-release` 为目标分支；只有发布候选验证完成后，才从 `pre-release` 合并到 `main`。
+> Maintainer note: for the upstream repository, target regular changes at `pre-release`; merge `pre-release` into `main` only after release-candidate validation.
+
 ## 变更类型 / Type of Change
 
 - [ ] Bug 修复 / Bug fix

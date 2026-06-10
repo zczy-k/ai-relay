@@ -1,5 +1,10 @@
-import { describe, it, expect } from 'vitest';
-import { resolveProvider, resolveFallbackModel, resolveUpstreamModel } from '../lib/providers/resolver';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { resolveProvider, resolveFallbackModel, resolveUpstreamModel, clearProvidersCache } from '../lib/providers/resolver';
+import {
+  saveCustomProvider,
+  __adminConfigCacheForTests,
+  createMemoryMockKV,
+} from '../lib/admin/admin-config';
 
 describe('GPT provider resolution tests', () => {
   it('should route GPT models to OpenAI', async () => {
@@ -103,6 +108,82 @@ describe('mimo-v2.5 provider resolution and mapping tests', () => {
   });
 });
 
+describe('Custom provider exact match and wildcard prefix routing tests', () => {
+  beforeEach(() => {
+    __adminConfigCacheForTests.clear();
+    clearProvidersCache();
+    const mock = createMemoryMockKV();
+    (global as any)._mockKVInstance = mock;
+    (global as any)._mockKVInstance._isMock = true;
+  });
+
+  afterEach(() => {
+    delete (global as any)._mockKVInstance;
+    __adminConfigCacheForTests.clear();
+    clearProvidersCache();
+  });
+
+  it('should only resolve exact match or wildcard prefixes, avoiding hijacking similar models', async () => {
+    await saveCustomProvider({
+      name: 'my_custom_provider',
+      displayName: 'My Custom Provider',
+      baseUrl: 'https://custom.example.com/v1',
+      modelPrefixes: ['gpt-4'],
+      headerFormat: 'openai',
+      envKeyField: 'MY_CUSTOM_PROVIDER_KEYS',
+      models: [{ id: 'gpt-4', displayName: 'GPT 4', contextWindow: 8192 }],
+    });
+
+    const gpt4Provider = await resolveProvider('gpt-4');
+    expect(gpt4Provider).not.toBeNull();
+    expect(gpt4Provider?.name).toBe('my_custom_provider');
+
+    const gpt4oProvider = await resolveProvider('gpt-4o');
+    expect(gpt4oProvider).not.toBeNull();
+    expect(gpt4oProvider?.name).toBe('openai');
+
+    const gpt41Provider = await resolveProvider('gpt-4.1');
+    expect(gpt41Provider).not.toBeNull();
+    expect(gpt41Provider?.name).toBe('openai');
+  });
+
+  it('should resolve wildcard prefixes correctly', async () => {
+    await saveCustomProvider({
+      name: 'wildcard_provider',
+      displayName: 'Wildcard Provider',
+      baseUrl: 'https://wildcard.example.com/v1',
+      modelPrefixes: ['my-model-'],
+      headerFormat: 'openai',
+      envKeyField: 'WILDCARD_PROVIDER_KEYS',
+      models: [{ id: 'my-model-v1', displayName: 'My Model V1', contextWindow: 8192 }],
+    });
+
+    const v2Provider = await resolveProvider('my-model-v2');
+    expect(v2Provider).not.toBeNull();
+    expect(v2Provider?.name).toBe('wildcard_provider');
+
+    const baseProvider = await resolveProvider('my-model');
+    expect(baseProvider).toBeNull();
+  });
+
+  it('should override built-in providers when a custom provider registers a duplicate model ID', async () => {
+    // Save a custom provider registering 'gpt-5.4-mini' (which is otherwise a built-in openai model)
+    await saveCustomProvider({
+      name: 'custom_override_provider',
+      displayName: 'Custom Override Provider',
+      baseUrl: 'https://override.example.com/v1',
+      modelPrefixes: ['gpt-5.4-mini'],
+      headerFormat: 'openai',
+      envKeyField: 'CUSTOM_OVERRIDE_KEYS',
+      models: [{ id: 'gpt-5.4-mini', displayName: 'Custom GPT 5.4 Mini Override', contextWindow: 128000 }],
+    });
+
+    const provider = await resolveProvider('gpt-5.4-mini');
+    expect(provider).not.toBeNull();
+    expect(provider?.name).toBe('custom_override_provider');
+  });
+});
+
 import { validateBase64ImageSizes } from '../lib/relay/validation';
 
 describe('base64 image size validation tests', () => {
@@ -125,7 +206,6 @@ describe('base64 image size validation tests', () => {
   });
 
   it('should fail validation and return error message for base64 images exceeding 1MB', () => {
-    // 2MB data: 2 * 1024 * 1024 = 2,097,152 bytes. Base64 length = 2097152 * 4 / 3 = 2,796,203 chars
     const largeString = 'A'.repeat(2800000);
     const body = {
       messages: [

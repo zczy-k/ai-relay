@@ -10,11 +10,68 @@ import { getAllProviders } from '@/lib/providers';
 import { buildHeaders, transformToAnthropic } from '@/lib/relay/transform';
 import { getUpstreamUrl, resolveFallbackModel, resolveUpstreamModel } from '@/lib/providers/resolver';
 import type { ChatCompletionRequest } from '@/lib/types';
+import type { ProviderConfig } from '@/lib/providers/types';
 
 export const runtime = 'nodejs';
 export const maxDuration = 15; // Max 15s duration for API route
 
 type Params = Promise<{ provider: string }>;
+const BROWSER_COMPAT_USER_AGENTS = [
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36',
+  'Mozilla/5.0',
+];
+
+function getFallbackOpenAIUrl(provider: ProviderConfig): string | null {
+  if (provider.headerFormat !== 'openai') return null;
+  const base = provider.baseUrl.trim().replace(/\/+$/, '');
+  if (base.endsWith('/v1')) return null;
+  return `${base}/v1/chat/completions`;
+}
+
+function summarizeUpstreamText(response: Response, text: string): string {
+  try {
+    const json = JSON.parse(text);
+    return json.error?.message || json.error || JSON.stringify(json);
+  } catch {
+    const trimmed = text.trim();
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('text/html') || /^<!doctype html/i.test(trimmed) || /^<html/i.test(trimmed)) {
+      const title = trimmed.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim();
+      const description = trimmed.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i)?.[1]?.trim();
+      const summary = [title, description].filter(Boolean).join(' - ');
+      return summary || `${response.status} ${response.statusText || 'HTML error page from upstream'}`;
+    }
+    return trimmed.length > 600 ? `${trimmed.slice(0, 600)}...` : trimmed;
+  }
+}
+
+function isValidTestPayload(provider: ProviderConfig, payload: any): boolean {
+  if (provider.headerFormat === 'anthropic') {
+    return Array.isArray(payload?.content) || typeof payload?.id === 'string';
+  }
+  return Array.isArray(payload?.choices);
+}
+
+function shouldTryNext(response: Response, text: string): boolean {
+  const contentType = response.headers.get('content-type') || '';
+  const trimmed = text.trim();
+  return contentType.includes('text/html') || /^<!doctype html/i.test(trimmed) || /^<html/i.test(trimmed);
+}
+
+function getUserAgentCandidates(provider: ProviderConfig): Array<string | undefined> {
+  const candidates: Array<string | undefined> = [
+    provider.userAgent?.trim() || undefined,
+    undefined,
+    ...BROWSER_COMPAT_USER_AGENTS,
+  ];
+  const seen = new Set<string>();
+  return candidates.filter((candidate) => {
+    const key = candidate || '__default_sdk__';
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 
 /**
  * POST /api/admin/providers/:provider/keys/test
@@ -45,20 +102,28 @@ export async function POST(request: NextRequest, { params }: { params: Params })
     );
   }
 
+  let keyParam = body.key?.trim() || '';
+  let hashParam = body.hash?.trim() || '';
+
+  if (keyParam.startsWith('hash:')) {
+    hashParam = keyParam.slice(5);
+    keyParam = '';
+  }
+
   let testKey = '';
-  if (body.key && typeof body.key === 'string' && body.key.trim().length > 0) {
-    testKey = tryDecodeBase64(body.key.trim());
-  } else if (body.hash && typeof body.hash === 'string' && body.hash.trim().length > 0) {
+  if (keyParam) {
+    testKey = tryDecodeBase64(keyParam);
+  } else if (hashParam) {
     // Locate plaintext key from managed KV or static env keys by matching hash
     const managed = await getManagedKeys(providerName);
     const envKeys = provider.envKeyField
       ? (process.env[provider.envKeyField] || '').split(',').map((k) => k.trim()).filter(Boolean)
       : [];
     const currentKeys = managed ?? envKeys;
-    const match = currentKeys.find((k) => hashKey(k) === body.hash);
+    const match = currentKeys.find((k) => hashKey(k) === hashParam);
     if (!match) {
       return Response.json(
-        { error: { message: `No key found with hash: ${body.hash}`, code: 404 } },
+        { error: { message: `No key found with hash: ${hashParam}`, code: 404 } },
         { status: 404 }
       );
     }
@@ -83,11 +148,17 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   }
 
   // Construct upstream request parameters
-  const url = getUpstreamUrl(provider);
+  const primaryUrl = getUpstreamUrl(provider);
+  const fallbackUrl = getFallbackOpenAIUrl(provider);
+  const urls = fallbackUrl && fallbackUrl !== primaryUrl ? [primaryUrl, fallbackUrl] : [primaryUrl];
+  const userAgents = getUserAgentCandidates(provider);
   const isAnthropic = provider.headerFormat === 'anthropic';
+
+  // Use appropriate default model based on provider format
+  const defaultModel = isAnthropic ? 'claude-haiku-4-5-20251001' : 'gpt-5.4-mini';
   const targetModel = (body.model && typeof body.model === 'string' && body.model.trim().length > 0)
     ? body.model.trim()
-    : await resolveFallbackModel('gpt-5.4-mini', providerName);
+    : await resolveFallbackModel(defaultModel, providerName);
   const upstreamModel = resolveUpstreamModel(targetModel, provider);
 
   const testBody: ChatCompletionRequest = {
@@ -97,43 +168,57 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   };
   const requestBody = isAnthropic ? transformToAnthropic(testBody) : testBody;
 
-  // Use AbortController for a strict 10s upstream response timeout
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  let lastFailure: { status?: number; error: string } | null = null;
 
-  try {
-    const upstreamResponse = await fetch(url, {
-      method: 'POST',
-      headers: buildHeaders(provider.headerFormat, testKey, false),
-      body: JSON.stringify(requestBody),
-      signal: controller.signal,
-    });
+  for (const url of urls) {
+    for (const userAgent of userAgents) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      let upstreamResponse: Response;
+      let responseText = '';
+      try {
+        upstreamResponse = await fetch(url, {
+          method: 'POST',
+          headers: buildHeaders(provider.headerFormat, testKey, false, undefined, userAgent),
+          body: JSON.stringify(requestBody),
+          signal: controller.signal,
+        });
+        responseText = await upstreamResponse.text();
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        lastFailure = {
+          error: err.name === 'AbortError' ? 'Timeout (10s)' : err.message,
+        };
+        continue;
+      }
+      clearTimeout(timeoutId);
 
-    clearTimeout(timeoutId);
+      let parsed: any = null;
+      try {
+        parsed = JSON.parse(responseText);
+      } catch {
+        parsed = null;
+      }
 
-    if (upstreamResponse.status === 200) {
-      return Response.json({ valid: true });
+      if (upstreamResponse.ok && parsed && isValidTestPayload(provider, parsed)) {
+        return Response.json({ valid: true });
+      }
+
+      const errorMessage = summarizeUpstreamText(upstreamResponse, responseText) || upstreamResponse.statusText;
+      lastFailure = {
+        status: upstreamResponse.status,
+        error: errorMessage,
+      };
+
+      if (!shouldTryNext(upstreamResponse, responseText)) {
+        break;
+      }
     }
-
-    // Capture precise error details from upstream if possible
-    let errorMessage = '';
-    try {
-      const errJson = await upstreamResponse.json();
-      errorMessage = errJson.error?.message || errJson.error || JSON.stringify(errJson);
-    } catch {
-      errorMessage = await upstreamResponse.text();
-    }
-
-    return Response.json({
-      valid: false,
-      status: upstreamResponse.status,
-      error: errorMessage || upstreamResponse.statusText,
-    });
-  } catch (err: any) {
-    clearTimeout(timeoutId);
-    return Response.json({
-      valid: false,
-      error: err.name === 'AbortError' ? 'Timeout (10s)' : err.message,
-    });
   }
+
+  return Response.json({
+    valid: false,
+    status: lastFailure?.status,
+    error: lastFailure?.error || 'Unknown upstream error',
+  });
 }

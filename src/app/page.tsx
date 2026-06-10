@@ -1,9 +1,10 @@
-import { getAllProviders } from '@/lib/providers';
+import { PROVIDERS } from '@/lib/providers';
 import Homepage, { type HomepageProvider } from './Homepage';
 
-export default async function Home() {
-  const allProviders = await getAllProviders();
-  const providers: HomepageProvider[] = Object.entries(allProviders).map(([id, config]) => ({
+export const dynamic = 'force-static';
+
+export default function Home() {
+  const providers: HomepageProvider[] = Object.entries(PROVIDERS).map(([id, config]) => ({
     id,
     name: config.displayName,
     prefixes: config.modelPrefixes,

@@ -34,12 +34,47 @@ jobs:
             echo "job=all" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: "Cron: Provider Health Probe"
-        if: steps.jobs.outputs.job == 'probe' || steps.jobs.outputs.job == 'all'
+      - name: Validate cron configuration
+        id: config
+        env:
+          DEPLOY_URL: ${{ secrets.DEPLOY_URL || vars.DEPLOY_URL }}
+          CRON_AUTH_TOKEN: ${{ secrets.CRON_SECRET || vars.CRON_SECRET || secrets.RELAY_ADMIN_KEY || vars.RELAY_ADMIN_KEY || secrets.RELAY_API_KEY || vars.RELAY_API_KEY }}
         run: |
+          set -euo pipefail
+
+          if [ -z "${DEPLOY_URL:-}" ]; then
+            echo "⚠️ DEPLOY_URL is not set; skipping cron HTTP calls."
+            echo "To enable GitHub Actions cron calls, add DEPLOY_URL in Settings → Secrets and variables → Actions"
+            echo "Example: https://ai-relay.pages.dev"
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ ! "$DEPLOY_URL" =~ ^https?:// ]]; then
+            echo "❌ Error: DEPLOY_URL must include http:// or https://"
+            echo "Current value: $DEPLOY_URL"
+            exit 1
+          fi
+
+          if [ -z "${CRON_AUTH_TOKEN:-}" ]; then
+            echo "❌ Error: no cron auth token is available"
+            echo "Set CRON_SECRET, RELAY_ADMIN_KEY, or RELAY_API_KEY in repository secrets or variables"
+            exit 1
+          fi
+
+          echo "base_url=${DEPLOY_URL%/}" >> "$GITHUB_OUTPUT"
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+
+      - name: "Cron: Provider Health Probe"
+        if: steps.config.outputs.enabled == 'true' && (steps.jobs.outputs.job == 'probe' || steps.jobs.outputs.job == 'all')
+        env:
+          CRON_AUTH_TOKEN: ${{ secrets.CRON_SECRET || vars.CRON_SECRET || secrets.RELAY_ADMIN_KEY || vars.RELAY_ADMIN_KEY || secrets.RELAY_API_KEY || vars.RELAY_API_KEY }}
+        run: |
+          set -euo pipefail
           RESPONSE=$(curl -s -o /tmp/probe.json -w "%{http_code}" \
-            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
-            "${{ vars.DEPLOY_URL }}/api/cron/probe")
+            -H "x-cron-secret: $CRON_AUTH_TOKEN" \
+            -H "Authorization: Bearer $CRON_AUTH_TOKEN" \
+            "${{ steps.config.outputs.base_url }}/api/cron/probe")
           echo "Status: $RESPONSE"
           cat /tmp/probe.json | jq . 2>/dev/null || cat /tmp/probe.json
           if [ "$RESPONSE" -ge 400 ]; then
@@ -48,11 +83,15 @@ jobs:
           fi
 
       - name: "Cron: Daily Usage Aggregation"
-        if: steps.jobs.outputs.job == 'usage' || steps.jobs.outputs.job == 'all'
+        if: steps.config.outputs.enabled == 'true' && (steps.jobs.outputs.job == 'usage' || steps.jobs.outputs.job == 'all')
+        env:
+          CRON_AUTH_TOKEN: ${{ secrets.CRON_SECRET || vars.CRON_SECRET || secrets.RELAY_ADMIN_KEY || vars.RELAY_ADMIN_KEY || secrets.RELAY_API_KEY || vars.RELAY_API_KEY }}
         run: |
+          set -euo pipefail
           RESPONSE=$(curl -s -o /tmp/usage.json -w "%{http_code}" \
-            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
-            "${{ vars.DEPLOY_URL }}/api/cron/usage")
+            -H "x-cron-secret: $CRON_AUTH_TOKEN" \
+            -H "Authorization: Bearer $CRON_AUTH_TOKEN" \
+            "${{ steps.config.outputs.base_url }}/api/cron/usage")
           echo "Status: $RESPONSE"
           cat /tmp/usage.json | jq . 2>/dev/null || cat /tmp/usage.json
           if [ "$RESPONSE" -ge 400 ]; then

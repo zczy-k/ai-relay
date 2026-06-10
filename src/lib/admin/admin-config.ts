@@ -8,6 +8,7 @@ import { withTimeout } from '@/lib/utils/timeout';
 import type { ProviderConfig } from '../providers/types';
 import type { PriorityRule } from './priority-rules-core';
 import { normalizePriorityRules } from './priority-rules-core';
+import { getCFEnvSync, getCFEnv, isCloudflareSync } from '@/lib/cf-env';
 
 let _kv: any = null;
 
@@ -190,10 +191,9 @@ async function getKV() {
   const g = global as any;
 
   // Cloudflare Pages: use CF KV binding via CFKVAdapter
-  const { isCloudflare, getCFEnv } = await import('@/lib/cf-env');
-  if (await isCloudflare()) {
+  if (isCloudflareSync()) {
     try {
-      const cfEnv = await getCFEnv();
+      const cfEnv = getCFEnvSync() || await getCFEnv();
       if (cfEnv?.KV) {
         const { CFKVAdapter } = await import('./cf-kv-adapter');
         return new CFKVAdapter(cfEnv.KV);
@@ -986,11 +986,38 @@ export async function deleteCustomProvider(name: string): Promise<void> {
   if (!custom[name]) {
     throw new Error(`Custom provider not found: ${name}`);
   }
+  const { PROVIDERS } = await import('../providers/registry');
+  const allProviderNames = Array.from(new Set([
+    ...Object.keys(PROVIDERS),
+    ...Object.keys(custom),
+  ]));
   delete custom[name];
   await kv.set('admin:custom_providers', JSON.stringify(custom));
-  // Clean up keys and fallbacks entries
+
+  // Clean up keys, its own fallback chain, and references from other fallback chains.
   await kv.del(`admin:keys:${name}`);
   await kv.del(`admin:fallbacks:${name}`);
+  await Promise.all(allProviderNames
+    .filter((providerName) => providerName !== name)
+    .map(async (providerName) => {
+      const raw = await kv.get(`${PREFIX.fallbacks}${providerName}`);
+      const chain = parseJsonOrArray(raw);
+      if (!chain) return;
+
+      const filtered = chain.filter((entry) => {
+        const colonIdx = entry.indexOf(':');
+        const providerNamePart = colonIdx >= 0 ? entry.slice(0, colonIdx) : entry;
+        return providerNamePart !== name;
+      });
+
+      if (filtered.length === chain.length) return;
+      if (filtered.length > 0) {
+        await kv.set(`${PREFIX.fallbacks}${providerName}`, JSON.stringify(filtered));
+      } else {
+        await kv.del(`${PREFIX.fallbacks}${providerName}`);
+      }
+      clearCache(`fallback:${providerName}`);
+    }));
   await bumpManagedKeysVersion(name, kv);
   clearCache('customProviders');
   clearCache(`keys:${name}`);
@@ -1126,6 +1153,7 @@ function validateCustomProviders(customProviders: any): Record<string, ProviderC
       headerFormat: val.headerFormat as 'openai' | 'anthropic' | 'azure',
       envKeyField: typeof val.envKeyField === 'string' ? val.envKeyField.trim() : `${val.name.toUpperCase()}_KEYS`,
       envBaseUrlField: typeof val.envBaseUrlField === 'string' ? val.envBaseUrlField.trim() : undefined,
+      userAgent: typeof val.userAgent === 'string' ? val.userAgent.trim() : undefined,
       models: Array.isArray(val.models) 
         ? val.models.filter((m: any) => m && typeof m === 'object' && typeof m.id === 'string' && typeof m.displayName === 'string') 
         : [],
@@ -1501,8 +1529,7 @@ export async function importStatsData(payload: Record<string, any>): Promise<voi
 
   // On CF, also write usage data to D1 so the chart reads from the correct store
   try {
-    const { getCFEnv } = await import('@/lib/cf-env');
-    const cfEnv = await getCFEnv();
+    const cfEnv = getCFEnvSync() || await getCFEnv();
     if (cfEnv?.DB) {
       const d1Stmts: any[] = [];
       const upsertSql = `INSERT INTO daily_usage (date, provider, requests, tokens, prompt_tokens, completion_tokens)
@@ -1540,4 +1567,3 @@ export async function importStatsData(payload: Record<string, any>): Promise<voi
     // Non-critical: D1 write failure should not fail the whole import
   }
 }
-

@@ -2,11 +2,11 @@
 
 <img src="docs/assets/logo-banner.svg" alt="AI Relay" width="400">
 
-**Serverless AI API Relay Gateway — deploy to Vercel in one click and run your own multi-provider AI gateway in 2 minutes**
+**Serverless AI API Relay Gateway — one-click deploy to Vercel, or automated deploy to Cloudflare via GitHub Actions**
 
 <h3>🚀 <a href="https://vercel.com/new/clone?repository-url=https://github.com/MoyuFamily/ai-relay&env=RELAY_API_KEY,RELAY_ADMIN_KEY,RELAY_SIGNING_SECRET&envDescription=API%20authentication%20keys%20(required%20for%20security)&envLink=https://github.com/MoyuFamily/ai-relay#environment-variables">Deploy to Vercel in one click and launch your AI API gateway in 2 minutes</a></h3>
 
-<p>No server, no Docker, no backend ops. Set 3 environment variables and run your own multi-provider AI Relay.</p>
+<p>No server, no Docker, no backend ops. Vercel one-click deploy; Cloudflare via GitHub Actions push-to-deploy.</p>
 
 <p>
   <a href="https://vercel.com/new/clone?repository-url=https://github.com/MoyuFamily/ai-relay&env=RELAY_API_KEY,RELAY_ADMIN_KEY,RELAY_SIGNING_SECRET&envDescription=API%20authentication%20keys%20(required%20for%20security)&envLink=https://github.com/MoyuFamily/ai-relay#environment-variables">
@@ -16,7 +16,7 @@
 
 <p><strong><a href="https://vercel.com/new/clone?repository-url=https://github.com/MoyuFamily/ai-relay&env=RELAY_API_KEY,RELAY_ADMIN_KEY,RELAY_SIGNING_SECRET&envDescription=API%20authentication%20keys%20(required%20for%20security)&envLink=https://github.com/MoyuFamily/ai-relay#environment-variables">👉 Deploy Now</a></strong> · <a href="#-one-click-deploy-launch-your-ai-api-gateway-in-2-minutes">View setup steps</a></p>
 
-[![Version](https://img.shields.io/badge/Version-2.7.0-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-2.12.0-green.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org/)
 [![Edge Runtime](https://img.shields.io/badge/Edge_Runtime-⚡-black?logo=vercel)](https://vercel.com/docs/functions/edge-functions)
@@ -28,15 +28,15 @@
 
 ---
 
-> 🚀 **No server, no Docker, no backend ops.**
+> 🚀 **No server, no Docker, no backend ops.** Vercel one-click; Cloudflare push-to-deploy via GitHub Actions.
 >
-> AI Relay runs on Vercel Edge Runtime. Click **Deploy with Vercel**, set 3 environment variables, and get your own serverless AI API relay gateway for OpenAI, Claude, DeepSeek, and custom providers.
+> Click **Deploy with Vercel** for instant launch, or fork and push to deploy on Cloudflare with D1 + KV auto-configuration.
 
 | What you care about | AI Relay's answer |
 |---|---|
-| **How do I deploy it?** | Click Deploy with Vercel, set 3 environment variables, and launch in about 2 minutes |
+| **How do I deploy it?** | Vercel: one-click deploy; Cloudflare: fork → configure GitHub Secrets → push to main, GitHub Actions handles the rest |
 | **Do I need a server?** | No VPS, no Docker, no backend operations |
-| **Can it start free?** | Built for Vercel Edge + KV, friendly to personal and small-team free-tier usage; Upstash free tier offers 500K KV operations/month, with sampling enabled the request-to-KV ratio can drop to ~1:1 |
+| **Can it start free?** | Vercel + Upstash free tier (500K KV ops/month); Cloudflare free tier (D1 5M reads + KV 100K ops/day); with sampling enabled, request-to-KV ratio drops to ~1:1 |
 | **Is integration hard?** | Keep the OpenAI SDK, change only `base_url`, and keep using `/v1/chat/completions` |
 
 ## Table of Contents
@@ -59,9 +59,9 @@
 
 | Feature | Description |
 |---------|-------------|
-| **Serverless Architecture** | Built on Vercel Edge Runtime — no VPS, no Docker, no backend ops |
-| **One-Click Deploy** | Click Deploy with Vercel, set 3 environment variables, and launch in about 2 minutes |
-| **Free Tier Friendly** | Personal developers and small teams can start on Vercel's free tier |
+| **Serverless Architecture** | Vercel Edge Runtime or Cloudflare Pages Workers — no VPS, no Docker, no backend ops |
+| **One-Click Deploy** | Vercel: one-click Deploy button; Cloudflare: fork + configure Secrets + push to main, GitHub Actions auto-deploys |
+| **Free Tier Friendly** | Vercel + Upstash free tier; Cloudflare free tier (D1 5M reads + KV 100K ops/day) |
 | **OpenAI Compatible** | Drop-in replacement for the OpenAI SDK |
 | **Multi-Provider Routing** | OpenAI · Claude · DeepSeek · MiMo · Custom |
 | **Multi-Key Rotation** | Round-Robin with automatic 429 backoff |
@@ -130,6 +130,75 @@ curl -X POST https://your-project.vercel.app/v1/chat/completions \
 ```
 
 🎉 **Done!** You now have a multi-provider AI API relay with automatic failover.
+
+<details>
+<summary><strong>☁️ Deploy to Cloudflare Pages (fully automated)</strong></summary>
+
+**Prerequisites:** [Cloudflare account](https://dash.cloudflare.com/sign-up) (free) + GitHub repository
+
+> ⚠️ **Important:** GitHub Secrets must be configured before pushing, or the deployment will fail.
+
+**Step 1 — Fork the repo and configure GitHub Secrets**
+
+In your GitHub repository, go to **Settings → Secrets and variables → Actions → Repository secrets** (not Environment secrets) and add:
+
+| Secret | Description | Required |
+|--------|-------------|----------|
+| `CLOUDFLARE_API_TOKEN` | CF API Token (needs Pages:Edit + D1:Edit + KV:Edit permissions) | ✅ |
+| `CLOUDFLARE_ACCOUNT_ID` | CF Account ID (found in the CF Dashboard sidebar) | ✅ |
+| `RELAY_API_KEY` | Client request auth key (choose any strong secret) | ✅ |
+| `RELAY_ADMIN_KEY` | Admin login key (optional, defaults to `RELAY_API_KEY`) | ⬜ |
+| `RELAY_SIGNING_SECRET` | Temp key signing secret (optional, defaults to `RELAY_API_KEY`) | ⬜ |
+| `CRON_SECRET` | Cron job auth key (optional; falls back to Admin/API Key auth when omitted) | ⬜ |
+
+> **How to get a Cloudflare API Token:**
+> 1. Visit [Cloudflare Dashboard](https://dash.cloudflare.com/profile/api-tokens)
+> 2. Click **Create Token** → **Create Custom Token**
+> 3. Set permissions: Account → Cloudflare Pages → Edit, Account → D1 → Edit, Account → Workers KV Storage → Edit
+> 4. Copy the generated token
+>
+> **How to get your Account ID:**
+> 1. Visit [Cloudflare Dashboard](https://dash.cloudflare.com/)
+> 2. Your **Account ID** is shown in the right sidebar
+>
+> **⚠️ Note:** Add these to **Repository secrets**, not Environment secrets. Environment secrets are only available in specific deployment environments and will cause the workflow to fail.
+
+**Optionally add the following to enable GitHub Actions Cron calls:**
+
+In **Settings → Secrets and variables → Actions**, add it under **Secrets** or **Variables**:
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `DEPLOY_URL` | Your Cloudflare Pages deployment URL, e.g. `https://ai-relay.pages.dev` (used by GitHub Actions Cron to call health probe and usage aggregation endpoints) | Optional |
+
+> **Note:** This `DEPLOY_URL` is a GitHub Actions Repository Secret or Repository Variable used only by GitHub Actions Cron in the Cloudflare deployment flow. Vercel deployments use Vercel Cron from `vercel.json`, so you do not need to configure `DEPLOY_URL` in the Vercel dashboard. If it is not configured, the GitHub Actions Cron workflow skips the remote health probe and usage aggregation calls without failing.
+
+**Step 2 — Push to trigger deployment**
+
+Push to the `main` branch — GitHub Actions will automatically:
+
+✅ Validate that required GitHub Secrets are configured  
+✅ Auto-detect and create the D1 database (`ai-relay`)  
+✅ Auto-detect and create the KV namespace (`ai-relay`)  
+✅ Run D1 migrations (create tables)  
+✅ Build and deploy to Cloudflare Pages  
+✅ Configure environment variables  
+✅ Bind KV/D1 resources  
+
+**Step 3 — Verify deployment**
+
+```bash
+curl https://ai-relay.pages.dev/health
+# → {"status":"ok"}
+```
+
+Visit `https://ai-relay.pages.dev/admin` to start using it.
+
+> **Storage:** CF deployment uses Cloudflare KV (config data) + D1 (usage stats). Free tier limits: D1 writes 100K rows/day (~30–50K AI requests/day), KV writes 1,000/day (config changes only — normal usage won't hit this).
+>
+> **Cron:** CF Pages Cron Triggers run via the `scheduled()` handler in `worker.ts`, not HTTP routes. Default schedule: daily quota reset at 00:00 UTC, health probe at 00:05 UTC.
+
+</details>
 
 <details>
 <summary><strong>📦 Local Development</strong></summary>
@@ -239,7 +308,9 @@ Generate time-limited keys from the Admin dashboard:
 | `XIAOMI_KEYS` | Xiaomi API Keys | ⬜ |
 | `XIAOMIMIMO_SGP_CODING_KEYS` | MiMo SGP Coding Plan API keys | ⬜ |
 | `XIAOMI_CODING_KEYS` | MiMo Coding Plan API keys | ⬜ |
+| `RELAY_UPSTREAM_TIMEOUT_MS` | Upstream provider request timeout in milliseconds; defaults to `50000`; set to `0` to disable active timeout | ⬜ |
 | `RELAY_KV_USAGE_SAMPLE_RATE` | Usage write sample rate; `1` is exact, `0.1` writes about 10% and scales values as estimates | ⬜ |
+| `RELAY_API_KEY_MIN_LENGTH` | Minimum character length for provider keys added via the Admin panel (default `20`; set to `0` to disable) | ⬜ |
 
 > [!NOTE]
 > Provider keys are best configured via the Admin panel (stored in Upstash Redis), not as environment variables. When adding or testing keys in Admin, both raw API keys and Base64-encoded keys are accepted and decoded automatically before saving or testing.
@@ -363,6 +434,8 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 3. Commit your changes (`git commit -m 'Add amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+Maintainer release flow is documented in [Release Flow](docs/RELEASE-FLOW.md): regular changes land in `pre-release` first, then ship to `main` after validation. Fork users can still deploy from the default `main` branch.
 
 ## 🙏 Acknowledgments
 

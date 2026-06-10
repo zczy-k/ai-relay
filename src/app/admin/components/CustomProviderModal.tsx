@@ -11,6 +11,7 @@ import {
   validateDraftProvider,
   type ProviderTemplate,
 } from './provider-templates';
+import { deriveModelPrefixesFromModels } from '../provider-import';
 
 interface CustomProviderModalProps {
   data: AdminData;
@@ -22,7 +23,8 @@ interface CustomProviderModalProps {
   setEditingCustomProvider: (val: any) => void;
   onSaveCustomProvider: (provider: any) => Promise<void>;
   onTestCustomProvider?: (provider: any, apiKeyValue: string, modelId?: string) => Promise<any>;
-  onFetchProviderModels?: (provider: any, apiKeyValue: string) => Promise<{ models: any[] }>;
+  onFetchProviderModels?: (provider: any, apiKeyValue: string) => Promise<{ models: any[]; userAgent?: string | null }>;
+  providerKeys?: Array<{ hash: string; masked: string; source: string }> | null;
 }
 
 export default function CustomProviderModal({
@@ -36,16 +38,21 @@ export default function CustomProviderModal({
   onSaveCustomProvider,
   onTestCustomProvider,
   onFetchProviderModels,
+  providerKeys,
 }: CustomProviderModalProps) {
+  const isImportDraft = !!editingCustomProvider?.isImportDraft;
   // Local states for custom provider form
   const [formId, setFormId] = useState('');
   const [formDisplayName, setFormDisplayName] = useState('');
   const [formBaseUrl, setFormBaseUrl] = useState('');
   const [formHeaderFormat, setFormHeaderFormat] = useState<'openai' | 'anthropic' | 'azure'>('openai');
   const [formModelPrefixes, setFormModelPrefixes] = useState('');
+  const [formUserAgent, setFormUserAgent] = useState('');
   const [formModels, setFormModels] = useState<any[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('openai');
   const [apiKeyValue, setApiKeyValue] = useState('');
+  const [selectedKeyHash, setSelectedKeyHash] = useState('');
+  const [useExistingKey, setUseExistingKey] = useState(false);
   const [testModelId, setTestModelId] = useState('');
   const [testState, setTestState] = useState<{ status: 'idle' | 'testing' | 'success' | 'error'; message: string }>({
     status: 'idle',
@@ -65,6 +72,7 @@ export default function CustomProviderModal({
     setFormBaseUrl(form.baseUrl);
     setFormHeaderFormat(form.headerFormat);
     setFormModelPrefixes(form.modelPrefixes.join(', '));
+    setFormUserAgent('');
     setTestModelId(form.modelPrefixes[0] ? `${form.modelPrefixes[0]}demo` : '');
     setTestState({ status: 'idle', message: '' });
     setModelFetchState({ status: 'idle', message: '' });
@@ -75,7 +83,8 @@ export default function CustomProviderModal({
   useEffect(() => {
     if (editingCustomProvider) {
       setSelectedTemplateId('custom');
-      setApiKeyValue('');
+      setApiKeyValue(isImportDraft ? (editingCustomProvider.apiKey || '') : '');
+      setSelectedKeyHash('');
       setTestState({ status: 'idle', message: '' });
       setModelFetchState({ status: 'idle', message: '' });
       setFormId(editingCustomProvider.id || editingCustomProvider.name || '');
@@ -83,8 +92,22 @@ export default function CustomProviderModal({
       setFormBaseUrl(editingCustomProvider.baseUrl || '');
       setFormHeaderFormat(editingCustomProvider.headerFormat || 'openai');
       setFormModelPrefixes((editingCustomProvider.modelPrefixes || []).join(', '));
+      setFormUserAgent(editingCustomProvider.userAgent || '');
       setFormModels(editingCustomProvider.models || []);
       setFetchedProviderModels([]);
+
+      // Check if there are existing keys
+      const hasExistingKeys = !isImportDraft && !!(providerKeys && providerKeys.length > 0);
+      setUseExistingKey(hasExistingKeys);
+      if (hasExistingKeys) {
+        setSelectedKeyHash(providerKeys[0].hash);
+      }
+
+      // Pre-fill test model from existing models
+      const existingModels = editingCustomProvider.models || [];
+      if (existingModels.length > 0) {
+        setTestModelId(existingModels[0].id);
+      }
     } else {
       const defaultTemplate = PROVIDER_TEMPLATES[0];
       setSelectedTemplateId(defaultTemplate.id);
@@ -94,14 +117,17 @@ export default function CustomProviderModal({
       setFormBaseUrl(form.baseUrl);
       setFormHeaderFormat(form.headerFormat);
       setFormModelPrefixes(form.modelPrefixes.join(', '));
+      setFormUserAgent('');
       setFormModels([]);
       setApiKeyValue('');
+      setSelectedKeyHash('');
+      setUseExistingKey(false);
       setTestModelId(form.modelPrefixes[0] ? `${form.modelPrefixes[0]}demo` : '');
       setTestState({ status: 'idle', message: '' });
       setModelFetchState({ status: 'idle', message: '' });
       setFetchedProviderModels([]);
     }
-  }, [editingCustomProvider, customProviderModalOpen]);
+  }, [editingCustomProvider, customProviderModalOpen, providerKeys, isImportDraft]);
 
   // Model helper callbacks
   const handleFormAddModel = () => {
@@ -130,6 +156,10 @@ export default function CustomProviderModal({
     setFormModels(formModels.filter((_, i) => i !== index));
   };
 
+  const handleFormClearModels = () => {
+    setFormModels([]);
+  };
+
   // data is still accepted for modal contract parity with parent components.
   void data;
 
@@ -139,11 +169,12 @@ export default function CustomProviderModal({
     baseUrl: formBaseUrl,
     headerFormat: formHeaderFormat,
     modelPrefixesText: formModelPrefixes,
+    userAgent: formUserAgent,
     models: formModels,
   });
   const providerValidation = validateDraftProvider(draftProvider);
-  const apiKeyValidation = validateApiKeyInput(apiKeyValue);
-  const currentStep = editingCustomProvider ? 1 : apiKeyValue.trim() ? 2 : 0;
+  const apiKeyValidation = validateApiKeyInput(apiKeyValue, data?.config?.apiKeyMinLength ?? 20);
+  const currentStep = editingCustomProvider && !isImportDraft ? 1 : apiKeyValue.trim() ? 2 : 0;
   const helperText = {
     chooseTemplate: lang === 'zh' ? '选择模板' : 'Choose template',
     configureKey: lang === 'zh' ? '配置密钥' : 'Configure key',
@@ -155,6 +186,8 @@ export default function CustomProviderModal({
     fetchingModels: t.fetchingModels || (lang === 'zh' ? '拉取中...' : 'Fetching...'),
     fetchedProviderModels: t.fetchedProviderModels || (lang === 'zh' ? '供应商支持的模型' : 'Provider-supported models'),
     addAllFetchedModels: t.addAllFetchedModels || (lang === 'zh' ? '一键添加全部' : 'Add all'),
+    removeAllFetchedModels: t.removeAllFetchedModels || (lang === 'zh' ? '取消全部' : 'Remove all'),
+    clearAllModels: t.clearAllModels || (lang === 'zh' ? '一键删除全部' : 'Delete all'),
   };
 
   const normalizeFetchedModel = (model: any) => ({
@@ -168,10 +201,12 @@ export default function CustomProviderModal({
     pricing: model.pricing || { input: 0, output: 0 },
   });
 
-  const handleAddFetchedModel = (model: any) => {
+  const handleToggleFetchedModel = (model: any) => {
     if (!model?.id) return;
     setFormModels((current) => {
-      if (current.some((item) => item.id === model.id)) return current;
+      if (current.some((item) => item.id === model.id)) {
+        return current.filter((item) => item.id !== model.id);
+      }
       return [...current, normalizeFetchedModel(model)].sort((a, b) => String(a.id).localeCompare(String(b.id)));
     });
   };
@@ -187,21 +222,45 @@ export default function CustomProviderModal({
     });
   };
 
+  const handleRemoveAllFetchedModels = () => {
+    if (fetchedProviderModels.length === 0) return;
+    const fetchedIds = new Set(fetchedProviderModels.map((model) => model.id));
+    setFormModels((current) => current.filter((model) => !fetchedIds.has(model.id)));
+  };
+
   const handleFetchProviderModels = async () => {
     if (!onFetchProviderModels) return;
     if (providerValidation) {
       setModelFetchState({ status: 'error', message: providerValidation });
       return;
     }
-    if (apiKeyValidation) {
-      setModelFetchState({ status: 'error', message: apiKeyValidation });
+
+    // Determine which key to use
+    const keyToUse = (editingCustomProvider && useExistingKey && selectedKeyHash)
+      ? `hash:${selectedKeyHash}`
+      : apiKeyValue.trim();
+
+    if (!keyToUse || (keyToUse.indexOf('hash:') !== 0 && apiKeyValidation)) {
+      setModelFetchState({ status: 'error', message: apiKeyValidation || 'missing-api-key' });
       return;
     }
+
     setModelFetchState({ status: 'loading', message: helperText.fetchingModels });
     try {
-      const result = await onFetchProviderModels(draftProvider, apiKeyValue.trim());
+      const result = await onFetchProviderModels(draftProvider, keyToUse);
       const models = Array.isArray(result?.models) ? result.models : [];
       setFetchedProviderModels(models);
+      if (Object.prototype.hasOwnProperty.call(result || {}, 'userAgent')) {
+        setFormUserAgent(typeof result.userAgent === 'string' && result.userAgent.trim() ? result.userAgent.trim() : '');
+      }
+
+      if (models.length > 0) {
+        const derived = deriveModelPrefixesFromModels(models);
+        if (derived.length > 0) {
+          setFormModelPrefixes(derived.join(', '));
+        }
+      }
+
       setModelFetchState({
         status: 'success',
         message: lang === 'zh' ? `已拉取 ${models.length} 个模型` : `Fetched ${models.length} models`,
@@ -220,13 +279,20 @@ export default function CustomProviderModal({
       setTestState({ status: 'error', message: providerValidation });
       return;
     }
-    if (apiKeyValidation) {
-      setTestState({ status: 'error', message: apiKeyValidation });
+
+    // Determine which key to use
+    const keyToUse = (editingCustomProvider && useExistingKey && selectedKeyHash)
+      ? `hash:${selectedKeyHash}`
+      : apiKeyValue.trim();
+
+    if (!keyToUse || (keyToUse.indexOf('hash:') !== 0 && apiKeyValidation)) {
+      setTestState({ status: 'error', message: apiKeyValidation || 'missing-api-key' });
       return;
     }
+
     setTestState({ status: 'testing', message: lang === 'zh' ? '测试中...' : 'Testing...' });
     try {
-      await onTestCustomProvider(draftProvider, apiKeyValue.trim(), testModelId.trim() || undefined);
+      await onTestCustomProvider(draftProvider, keyToUse, testModelId.trim() || undefined);
       setTestState({ status: 'success', message: lang === 'zh' ? '连通性测试通过' : 'Connectivity test passed' });
     } catch (error: any) {
       setTestState({ status: 'error', message: error?.message || (lang === 'zh' ? '连通性测试失败' : 'Connectivity test failed') });
@@ -280,7 +346,7 @@ export default function CustomProviderModal({
         gap: '1.25rem',
       }}>
         <h2 style={{ fontSize: '1.25rem', margin: 0, color: '#fff', fontWeight: 600 }}>
-          {editingCustomProvider ? t.editCustomProvider : t.addCustomProvider}
+          {editingCustomProvider && !isImportDraft ? t.editCustomProvider : t.addCustomProvider}
         </h2>
 
         <StepperIndicator
@@ -324,26 +390,116 @@ export default function CustomProviderModal({
           backgroundColor: 'rgba(15, 23, 42, 0.45)',
           border: '1px solid rgba(255,255,255,0.07)',
         }}>
-          <div>
+          <div style={{ gridColumn: '1 / -1' }}>
             <label style={{ display: 'block', fontSize: '0.8rem', color: '#9ca3af', marginBottom: '0.3rem' }}>
               {helperText.apiKey}
+              {editingCustomProvider && !isImportDraft && editingCustomProvider.keyCount > 0 && (
+                <span style={{ marginLeft: '0.5rem', color: '#6ee7b7', fontSize: '0.75rem' }}>
+                  ({lang === 'zh' ? `已有 ${editingCustomProvider.keyCount} 个密钥` : `${editingCustomProvider.keyCount} key(s) configured`})
+                </span>
+              )}
             </label>
-            <input
-              type="password"
-              placeholder="sk-..."
-              value={apiKeyValue}
-              onChange={(e) => setApiKeyValue(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '0.55rem 0.75rem',
-                borderRadius: '6px',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                backgroundColor: 'rgba(0, 0, 0, 0.25)',
-                color: '#fff',
-                fontSize: '0.9rem',
-                boxSizing: 'border-box',
-              }}
-            />
+            {editingCustomProvider && !isImportDraft && providerKeys && providerKeys.length > 0 ? (
+              <>
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => setUseExistingKey(true)}
+                    style={{
+                      padding: '0.35rem 0.65rem',
+                      borderRadius: '6px',
+                      border: useExistingKey ? '1px solid rgba(96, 165, 250, 0.5)' : '1px solid rgba(255,255,255,0.08)',
+                      backgroundColor: useExistingKey ? 'rgba(37, 99, 235, 0.18)' : 'rgba(0, 0, 0, 0.15)',
+                      color: useExistingKey ? '#60a5fa' : '#9ca3af',
+                      cursor: 'pointer',
+                      fontSize: '0.8rem',
+                      fontWeight: useExistingKey ? 600 : 400,
+                    }}
+                  >
+                    {lang === 'zh' ? '选择已有密钥' : 'Use existing key'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUseExistingKey(false)}
+                    style={{
+                      padding: '0.35rem 0.65rem',
+                      borderRadius: '6px',
+                      border: !useExistingKey ? '1px solid rgba(96, 165, 250, 0.5)' : '1px solid rgba(255,255,255,0.08)',
+                      backgroundColor: !useExistingKey ? 'rgba(37, 99, 235, 0.18)' : 'rgba(0, 0, 0, 0.15)',
+                      color: !useExistingKey ? '#60a5fa' : '#9ca3af',
+                      cursor: 'pointer',
+                      fontSize: '0.8rem',
+                      fontWeight: !useExistingKey ? 600 : 400,
+                    }}
+                  >
+                    {lang === 'zh' ? '输入新密钥' : 'Enter new key'}
+                  </button>
+                </div>
+                {useExistingKey ? (
+                  <select
+                    value={selectedKeyHash}
+                    onChange={(e) => setSelectedKeyHash(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.55rem 0.75rem',
+                      borderRadius: '6px',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      backgroundColor: 'rgba(0, 0, 0, 0.25)',
+                      color: '#fff',
+                      fontSize: '0.9rem',
+                      boxSizing: 'border-box',
+                    }}
+                  >
+                    {providerKeys.map((key) => (
+                      <option key={key.hash} value={key.hash}>
+                        {key.masked} ({key.source})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="password"
+                    placeholder="sk-..."
+                    value={apiKeyValue}
+                    onChange={(e) => setApiKeyValue(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.55rem 0.75rem',
+                      borderRadius: '6px',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      backgroundColor: 'rgba(0, 0, 0, 0.25)',
+                      color: '#fff',
+                      fontSize: '0.9rem',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                )}
+              </>
+            ) : (
+              <input
+                type="password"
+                placeholder={editingCustomProvider && !isImportDraft ? (lang === 'zh' ? '可选：测试新密钥' : 'Optional: test new key') : 'sk-...'}
+                value={apiKeyValue}
+                onChange={(e) => setApiKeyValue(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '0.55rem 0.75rem',
+                  borderRadius: '6px',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  backgroundColor: 'rgba(0, 0, 0, 0.25)',
+                  color: '#fff',
+                  fontSize: '0.9rem',
+                  boxSizing: 'border-box',
+                }}
+              />
+            )}
+            {editingCustomProvider && !isImportDraft && editingCustomProvider.keyCount > 0 && !providerKeys?.length && (
+              <div style={{ fontSize: '0.72rem', color: '#6b7280', marginTop: '0.35rem' }}>
+                {lang === 'zh'
+                  ? '编辑时无需重新输入已有密钥，如需测试新密钥请在此输入'
+                  : 'No need to re-enter existing keys. Enter here only to test a new key'}
+              </div>
+            )}
           </div>
           <div>
             <label style={{ display: 'block', fontSize: '0.8rem', color: '#9ca3af', marginBottom: '0.3rem' }}>
@@ -402,7 +558,7 @@ export default function CustomProviderModal({
               placeholder="e.g. custom_openai"
               value={formId}
               onChange={(e) => setFormId(e.target.value)}
-              disabled={!!editingCustomProvider}
+              disabled={!!editingCustomProvider && !isImportDraft}
               style={{
                 width: '100%',
                 padding: '0.6rem 0.8rem',
@@ -412,7 +568,7 @@ export default function CustomProviderModal({
                 color: '#fff',
                 fontSize: '0.9rem',
                 boxSizing: 'border-box',
-                opacity: editingCustomProvider ? 0.6 : 1,
+                opacity: editingCustomProvider && !isImportDraft ? 0.6 : 1,
               }}
             />
           </div>
@@ -488,9 +644,31 @@ export default function CustomProviderModal({
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', color: '#9ca3af', marginBottom: '0.3rem' }}>
-                {t.modelPrefixes}
-              </label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: '#9ca3af', margin: 0 }}>
+                  {t.modelPrefixes}
+                </label>
+                {formModels.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const derived = deriveModelPrefixesFromModels(formModels);
+                      setFormModelPrefixes(derived.join(', '));
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#60a5fa',
+                      fontSize: '0.74rem',
+                      cursor: 'pointer',
+                      padding: 0,
+                      fontWeight: 500,
+                    }}
+                  >
+                    {t.deriveFromModels || 'Auto-derive'}
+                  </button>
+                )}
+              </div>
               <input
                 type="text"
                 placeholder="e.g. gpt-, claude-"
@@ -507,6 +685,33 @@ export default function CustomProviderModal({
                   boxSizing: 'border-box',
                 }}
               />
+            </div>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.85rem', color: '#9ca3af', marginBottom: '0.3rem' }}>
+              User-Agent {lang === 'zh' ? '(可选)' : '(Optional)'}
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+              value={formUserAgent}
+              onChange={(e) => setFormUserAgent(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.6rem 0.8rem',
+                borderRadius: '6px',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                backgroundColor: 'rgba(0, 0, 0, 0.25)',
+                color: '#fff',
+                fontSize: '0.9rem',
+                boxSizing: 'border-box',
+              }}
+            />
+            <div style={{ fontSize: '0.72rem', color: '#6b7280', marginTop: '0.35rem' }}>
+              {lang === 'zh'
+                ? '自定义发送给上游的 User-Agent。留空则使用默认 SDK User-Agent。'
+                : 'Custom User-Agent sent to upstream. Leave empty to use default SDK User-Agent.'}
             </div>
           </div>
 
@@ -550,6 +755,24 @@ export default function CustomProviderModal({
                 >
                   {t.addModel}
                 </button>
+
+                <button
+                  type="button"
+                  onClick={handleFormClearModels}
+                  disabled={formModels.length === 0}
+                  style={{
+                    padding: '0.3rem 0.6rem',
+                    borderRadius: '4px',
+                    border: '1px solid rgba(239, 68, 68, 0.35)',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    color: '#fca5a5',
+                    cursor: formModels.length === 0 ? 'not-allowed' : 'pointer',
+                    fontSize: '0.8rem',
+                    opacity: formModels.length === 0 ? 0.55 : 1,
+                  }}
+                >
+                  {helperText.clearAllModels}
+                </button>
               </div>
             </div>
 
@@ -567,23 +790,42 @@ export default function CustomProviderModal({
                   <span style={{ color: '#d1fae5', fontWeight: 700, fontSize: '0.85rem' }}>
                     {helperText.fetchedProviderModels}
                   </span>
-                  <button
-                    type="button"
-                    onClick={handleAddAllFetchedModels}
-                    disabled={fetchedProviderModels.length === 0}
-                    style={{
-                      padding: '0.3rem 0.6rem',
-                      borderRadius: '4px',
-                      border: '1px solid rgba(16, 185, 129, 0.35)',
-                      backgroundColor: 'rgba(16, 185, 129, 0.12)',
-                      color: '#6ee7b7',
-                      cursor: fetchedProviderModels.length === 0 ? 'not-allowed' : 'pointer',
-                      fontSize: '0.78rem',
-                      opacity: fetchedProviderModels.length === 0 ? 0.55 : 1,
-                    }}
-                  >
-                    {helperText.addAllFetchedModels}
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                    <button
+                      type="button"
+                      onClick={handleAddAllFetchedModels}
+                      disabled={fetchedProviderModels.length === 0}
+                      style={{
+                        padding: '0.3rem 0.6rem',
+                        borderRadius: '4px',
+                        border: '1px solid rgba(16, 185, 129, 0.35)',
+                        backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                        color: '#6ee7b7',
+                        cursor: fetchedProviderModels.length === 0 ? 'not-allowed' : 'pointer',
+                        fontSize: '0.78rem',
+                        opacity: fetchedProviderModels.length === 0 ? 0.55 : 1,
+                      }}
+                    >
+                      {helperText.addAllFetchedModels}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRemoveAllFetchedModels}
+                      disabled={fetchedProviderModels.length === 0}
+                      style={{
+                        padding: '0.3rem 0.6rem',
+                        borderRadius: '4px',
+                        border: '1px solid rgba(239, 68, 68, 0.32)',
+                        backgroundColor: 'rgba(239, 68, 68, 0.09)',
+                        color: '#fca5a5',
+                        cursor: fetchedProviderModels.length === 0 ? 'not-allowed' : 'pointer',
+                        fontSize: '0.78rem',
+                        opacity: fetchedProviderModels.length === 0 ? 0.55 : 1,
+                      }}
+                    >
+                      {helperText.removeAllFetchedModels}
+                    </button>
+                  </div>
                 </div>
                 {fetchedProviderModels.length > 0 ? (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
@@ -593,20 +835,21 @@ export default function CustomProviderModal({
                         <button
                           key={model.id}
                           type="button"
-                          onClick={() => handleAddFetchedModel(model)}
-                          disabled={alreadyAdded}
-                          title={model.displayName || model.id}
+                          onClick={() => handleToggleFetchedModel(model)}
+                          title={alreadyAdded
+                            ? (lang === 'zh' ? `点击移除 ${model.id}` : `Click to remove ${model.id}`)
+                            : (lang === 'zh' ? `点击添加 ${model.id}` : `Click to add ${model.id}`)}
                           style={{
                             padding: '0.25rem 0.5rem',
                             borderRadius: '999px',
-                            border: '1px solid rgba(255,255,255,0.08)',
-                            backgroundColor: alreadyAdded ? 'rgba(148, 163, 184, 0.12)' : 'rgba(15, 23, 42, 0.55)',
-                            color: alreadyAdded ? '#94a3b8' : '#e5e7eb',
-                            cursor: alreadyAdded ? 'not-allowed' : 'pointer',
+                            border: alreadyAdded ? '1px solid rgba(16, 185, 129, 0.55)' : '1px solid rgba(255,255,255,0.08)',
+                            backgroundColor: alreadyAdded ? 'rgba(16, 185, 129, 0.14)' : 'rgba(15, 23, 42, 0.55)',
+                            color: alreadyAdded ? '#bbf7d0' : '#e5e7eb',
+                            cursor: 'pointer',
                             fontSize: '0.74rem',
                           }}
                         >
-                          {model.id}
+                          {alreadyAdded ? `✓ ${model.id}` : model.id}
                         </button>
                       );
                     })}
@@ -837,14 +1080,20 @@ export default function CustomProviderModal({
                 return;
               }
               
-              await onSaveCustomProvider({
+              const providerToSave: any = {
                 name: formId.trim(),
                 displayName: formDisplayName.trim(),
                 baseUrl: formBaseUrl.trim(),
                 headerFormat: formHeaderFormat,
                 modelPrefixes: prefixes,
+                userAgent: formUserAgent.trim() || undefined,
                 models: formModels
-              });
+              };
+              if (!useExistingKey && apiKeyValue.trim()) {
+                providerToSave.apiKey = apiKeyValue.trim();
+              }
+
+              await onSaveCustomProvider(providerToSave);
             }}
             style={{
               padding: '0.5rem 1.25rem',

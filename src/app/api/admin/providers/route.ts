@@ -68,6 +68,7 @@ export async function POST(request: NextRequest) {
     modelPrefixes: modelPrefixes.map(p => p.trim()).filter(Boolean),
     envKeyField: body.envKeyField || `${name.toUpperCase()}_KEYS`,
     envBaseUrlField: body.envBaseUrlField || undefined,
+    userAgent: typeof body.userAgent === 'string' && body.userAgent.trim() ? body.userAgent.trim() : undefined,
     models: Array.isArray(models) ? models : [],
     isCustom: true,
   };

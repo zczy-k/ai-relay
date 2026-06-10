@@ -15,6 +15,7 @@ import { RelayError } from '@/lib/errors';
 import { createUsageEvent, getBatchRecorder } from '@/lib/usage';
 import { createUsageStorage } from '@/lib/usage/factory';
 import { recordRequestLog } from '@/lib/observability/request-logs';
+import { chunkHasUsage, jsonStringFieldLength } from '@/lib/usage/stream-usage';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -29,6 +30,10 @@ const CHARS_PER_TOKEN = 4;
  */
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / CHARS_PER_TOKEN);
+}
+
+function estimateTokensFromChars(charCount: number): number {
+  return Math.ceil(charCount / CHARS_PER_TOKEN);
 }
 
 /**
@@ -51,7 +56,7 @@ function wrapStreamWithUsageTracking(
   const decoder = new TextDecoder();
   let buffer = '';
   let lastUsage: { prompt_tokens?: number; completion_tokens?: number } | null = null;
-  let accumulatedContent = '';
+  let accumulatedContentChars = 0;
   let recorded = false;
 
   async function recordUsage(promptTokens: number, completionTokens: number): Promise<void> {
@@ -92,10 +97,9 @@ function wrapStreamWithUsageTracking(
         // Stream ended — record usage
         if (lastUsage) {
           await recordUsage(lastUsage.prompt_tokens || 0, lastUsage.completion_tokens || 0);
-        } else if (accumulatedContent) {
-          // Fallback: estimate tokens from accumulated content
-          const estimatedCompletion = estimateTokens(accumulatedContent);
-          await recordUsage(requestPromptTokens, estimatedCompletion);
+        } else if (accumulatedContentChars > 0) {
+          // Fallback: estimate tokens from accumulated content length.
+          await recordUsage(requestPromptTokens, estimateTokensFromChars(accumulatedContentChars));
         }
         controller.close();
         return;
@@ -111,51 +115,46 @@ function wrapStreamWithUsageTracking(
 
       for (const line of lines) {
         const trimmed = line.trim();
+        if (!trimmed.startsWith('data: ')) continue;
+        const data = trimmed.slice(6).trim();
+        if (data === '[DONE]') continue;
 
-        // OpenAI format: `data: {...}` with usage field
-        if (trimmed.startsWith('data: ')) {
-          const data = trimmed.slice(6).trim();
-          if (data === '[DONE]') continue;
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.usage) {
-              lastUsage = parsed.usage;
-            }
-            // Accumulate content for fallback estimation
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) {
-              accumulatedContent += content;
-            }
-          } catch {
-            // Not valid JSON, skip
+        // Fast path: usage data only ever lives in chunks carrying a
+        // *_tokens field. For the thousands of content-delta chunks in a
+        // large generation, skip JSON.parse entirely and just measure the
+        // delta length via a substring scan — this is what keeps the worker
+        // under Cloudflare's CPU-time budget on big (code) responses.
+        if (!chunkHasUsage(data)) {
+          if (lastUsage) continue; // already have real usage; fallback unneeded
+          if (providerName === 'anthropic') {
+            // content_block_delta → { delta: { text } }
+            accumulatedContentChars += jsonStringFieldLength(data, 'text');
+          } else {
+            // chat.completion.chunk → choices[].delta.content
+            accumulatedContentChars += jsonStringFieldLength(data, 'content');
           }
+          continue;
         }
 
-        // Anthropic format: `event: message_delta` followed by `data: {...}`
-        if (trimmed.startsWith('event: message_delta')) {
-          // Next data line should have usage
-          // We'll catch it in the data parsing above
-        }
-
-        // Anthropic usage in message_delta data
-        if (trimmed.startsWith('data: ') && providerName === 'anthropic') {
-          try {
-            const parsed = JSON.parse(trimmed.slice(6));
-            if (parsed.type === 'message_delta' && parsed.usage) {
-              lastUsage = {
-                prompt_tokens: parsed.usage.input_tokens || 0,
-                completion_tokens: parsed.usage.output_tokens || 0,
-              };
-            }
-            // Anthropic content_block_delta
-            if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-              accumulatedContent += parsed.delta.text;
-            }
-          } catch {
-            // skip
+        // Slow path: rare, only for usage-bearing chunks.
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.usage) {
+            lastUsage = parsed.usage;
           }
+          if (providerName === 'anthropic' && parsed.type === 'message_delta' && parsed.usage) {
+            lastUsage = {
+              prompt_tokens: parsed.usage.input_tokens || 0,
+              completion_tokens: parsed.usage.output_tokens || 0,
+            };
+          }
+        } catch {
+          // Not valid JSON, skip
         }
       }
+    },
+    cancel() {
+      reader.cancel().catch(() => {});
     },
   });
 }
@@ -195,8 +194,6 @@ function estimatePromptTokens(body: { messages?: Array<{ content?: string | Arra
  * Routes requests to the appropriate upstream provider based on model prefix.
  */
 export async function POST(request: NextRequest) {
-  const usageStorage = await createUsageStorage();
-  batchRecorder.setStorage(usageStorage as any);
   const traceId = request.headers.get('x-request-id') || `trace_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   const routeStartTime = Date.now();
   let requestedModel: string | undefined;
@@ -213,6 +210,9 @@ export async function POST(request: NextRequest) {
       { status: 401, headers: { 'Content-Type': 'application/json' } }
     );
   }
+
+  const usageStorage = await createUsageStorage();
+  batchRecorder.setStorage(usageStorage as any);
 
   // 2. Parse request body
   let body;
@@ -301,7 +301,8 @@ export async function POST(request: NextRequest) {
     // 4. Relay the request
   try {
     const startTime = Date.now();
-    const { response, provider, apiKey } = await relayRequest(body);
+    const userAgent = request.headers.get('user-agent') || undefined;
+    const { response, provider, apiKey } = await relayRequest(body, 'chat', userAgent);
     const latencyMs = Date.now() - startTime;
 
     // 5. Stream or return the response

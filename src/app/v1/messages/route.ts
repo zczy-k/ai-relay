@@ -10,6 +10,7 @@ import { RelayError } from '@/lib/errors';
 import { createUsageEvent, getBatchRecorder } from '@/lib/usage';
 import { createUsageStorage } from '@/lib/usage/factory';
 import { recordRequestLog } from '@/lib/observability/request-logs';
+import { chunkHasUsage, jsonStringFieldLength } from '@/lib/usage/stream-usage';
 import type { AnthropicMessagesRequest } from '@/lib/types';
 
 export const runtime = 'nodejs';
@@ -33,6 +34,10 @@ function jsonError(status: number, message: string, type = 'invalid_request_erro
 
 function estimateTokens(text: string): number {
   return Math.max(1, Math.ceil(text.length / CHARS_PER_TOKEN));
+}
+
+function estimateTokensFromChars(charCount: number): number {
+  return Math.max(1, Math.ceil(charCount / CHARS_PER_TOKEN));
 }
 
 function contentToText(content: unknown): string {
@@ -77,7 +82,7 @@ function wrapAnthropicStreamWithUsageTracking(
   const reader = upstreamBody.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
-  let accumulatedContent = '';
+  let accumulatedContentChars = 0;
   let lastUsage: { input_tokens?: number; output_tokens?: number } | null = null;
   let recorded = false;
 
@@ -119,8 +124,8 @@ function wrapAnthropicStreamWithUsageTracking(
         try {
           if (lastUsage) {
             await recordUsage(lastUsage.input_tokens ?? requestPromptTokens, lastUsage.output_tokens ?? 0);
-          } else if (accumulatedContent) {
-            await recordUsage(requestPromptTokens, estimateTokens(accumulatedContent));
+          } else if (accumulatedContentChars > 0) {
+            await recordUsage(requestPromptTokens, estimateTokensFromChars(accumulatedContentChars));
           }
         } catch (error) {
           console.error('[Usage] anthropic stream recordUsage failed:', error);
@@ -138,8 +143,20 @@ function wrapAnthropicStreamWithUsageTracking(
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed.startsWith('data: ')) continue;
+        const data = trimmed.slice(6);
+
+        // Fast path: skip JSON.parse for content_block_delta chunks (the bulk
+        // of a large generation). Usage lives only in message_start /
+        // message_delta, which always carry a *_tokens field.
+        if (!chunkHasUsage(data)) {
+          if (!lastUsage?.output_tokens) {
+            accumulatedContentChars += jsonStringFieldLength(data, 'text');
+          }
+          continue;
+        }
+
         try {
-          const parsed = JSON.parse(trimmed.slice(6));
+          const parsed = JSON.parse(data);
           if (parsed.type === 'message_start' && parsed.message?.usage) {
             lastUsage = {
               input_tokens: parsed.message.usage.input_tokens,
@@ -151,9 +168,6 @@ function wrapAnthropicStreamWithUsageTracking(
               input_tokens: lastUsage?.input_tokens,
               output_tokens: parsed.usage.output_tokens,
             };
-          }
-          if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-            accumulatedContent += parsed.delta.text;
           }
         } catch {
           // Ignore non-JSON SSE payloads.
@@ -180,13 +194,14 @@ function validateBody(body: Partial<AnthropicMessagesRequest>): string | null {
 }
 
 export async function POST(request: NextRequest) {
-  const usageStorage = await createUsageStorage();
-  batchRecorder.setStorage(usageStorage as any);
   const traceId = request.headers.get('x-request-id') || `trace_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 
   if (!(await validateAuth(request))) {
     return jsonError(401, 'Invalid API key. Provide a valid key in the Authorization or x-api-key header.', 'authentication_error');
   }
+
+  const usageStorage = await createUsageStorage();
+  batchRecorder.setStorage(usageStorage as any);
 
   let body: AnthropicMessagesRequest;
   try {
@@ -221,7 +236,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const startTime = Date.now();
-    const { response, provider, apiKey } = await relayRequest(body, 'anthropicMessages');
+    const userAgent = request.headers.get('user-agent') || undefined;
+    const { response, provider, apiKey } = await relayRequest(body, 'anthropicMessages', userAgent);
     const latencyMs = Date.now() - startTime;
 
     if (body.stream && response.ok && response.body) {
