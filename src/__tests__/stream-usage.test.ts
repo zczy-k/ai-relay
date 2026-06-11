@@ -2,8 +2,39 @@
 // Streaming usage parsing helpers — CPU-budget fast path
 // ============================================================
 
-import { describe, it, expect } from 'vitest';
-import { chunkHasUsage, jsonStringFieldLength } from '@/lib/usage/stream-usage';
+import { describe, it, expect, afterEach } from 'vitest';
+import {
+  chunkHasUsage,
+  jsonStringFieldLength,
+  createByteCountingStream,
+  estimateCompletionTokensFromStreamBytes,
+} from '@/lib/usage/stream-usage';
+
+/** Build a ReadableStream that emits the given Uint8Array chunks in order. */
+function streamFromChunks(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
+  let i = 0;
+  return new ReadableStream({
+    pull(controller) {
+      if (i < chunks.length) {
+        controller.enqueue(chunks[i++]);
+      } else {
+        controller.close();
+      }
+    },
+  });
+}
+
+/** Drain a stream and return the concatenated bytes it passed through. */
+async function drain(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {
+  const reader = stream.getReader();
+  const out: number[] = [];
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) out.push(...value);
+  }
+  return new Uint8Array(out);
+}
 
 describe('stream-usage helpers', () => {
   describe('chunkHasUsage', () => {
@@ -92,6 +123,82 @@ describe('stream-usage helpers', () => {
     it('does not bleed past the field into later fields', () => {
       const data = JSON.stringify({ delta: 'short', tail: 'this should not be counted' });
       expect(jsonStringFieldLength(data, 'delta')).toBe('short'.length);
+    });
+  });
+
+  describe('estimateCompletionTokensFromStreamBytes', () => {
+    const ENV_KEY = 'RELAY_STREAM_BYTES_PER_TOKEN';
+    afterEach(() => {
+      delete process.env[ENV_KEY];
+    });
+
+    it('returns 0 for a zero or negative byte count', () => {
+      expect(estimateCompletionTokensFromStreamBytes(0)).toBe(0);
+      expect(estimateCompletionTokensFromStreamBytes(-100)).toBe(0);
+    });
+
+    it('estimates with the default divisor (20 bytes/token)', () => {
+      expect(estimateCompletionTokensFromStreamBytes(2000)).toBe(100);
+    });
+
+    it('never returns less than 1 for a non-empty body', () => {
+      // A few bytes is still at least one token, not rounded down to zero.
+      expect(estimateCompletionTokensFromStreamBytes(3)).toBe(1);
+    });
+
+    it('honours the RELAY_STREAM_BYTES_PER_TOKEN override', () => {
+      process.env[ENV_KEY] = '10';
+      expect(estimateCompletionTokensFromStreamBytes(2000)).toBe(200);
+    });
+
+    it('falls back to the default for an invalid override', () => {
+      process.env[ENV_KEY] = 'not-a-number';
+      expect(estimateCompletionTokensFromStreamBytes(2000)).toBe(100);
+      process.env[ENV_KEY] = '0';
+      expect(estimateCompletionTokensFromStreamBytes(2000)).toBe(100);
+    });
+  });
+
+  describe('createByteCountingStream', () => {
+    it('passes every chunk through unchanged', async () => {
+      const enc = new TextEncoder();
+      const chunks = [enc.encode('data: a\n\n'), enc.encode('data: bb\n\n'), enc.encode('data: [DONE]\n\n')];
+      const passed = await drain(createByteCountingStream(streamFromChunks(chunks), () => {}));
+      const expected = enc.encode('data: a\n\ndata: bb\n\ndata: [DONE]\n\n');
+      expect(passed).toEqual(expected);
+    });
+
+    it('reports the total byte length to onDone after the stream ends', async () => {
+      const enc = new TextEncoder();
+      const chunks = [enc.encode('hello'), enc.encode(' '), enc.encode('world')];
+      const total = chunks.reduce((n, c) => n + c.byteLength, 0);
+      let reported = -1;
+      await drain(createByteCountingStream(streamFromChunks(chunks), (bytes) => { reported = bytes; }));
+      expect(reported).toBe(total);
+    });
+
+    it('awaits an async onDone before closing', async () => {
+      let settled = false;
+      await drain(createByteCountingStream(streamFromChunks([new Uint8Array([1, 2, 3])]), async () => {
+        await Promise.resolve();
+        settled = true;
+      }));
+      expect(settled).toBe(true);
+    });
+
+    it('swallows errors thrown by onDone so the stream still closes', async () => {
+      // onDone is best-effort usage recording — a failure there must not surface
+      // as a stream error to the client.
+      const passed = await drain(createByteCountingStream(streamFromChunks([new Uint8Array([9])]), () => {
+        throw new Error('record failed');
+      }));
+      expect(passed).toEqual(new Uint8Array([9]));
+    });
+
+    it('reports zero bytes for an empty stream', async () => {
+      let reported = -1;
+      await drain(createByteCountingStream(streamFromChunks([]), (bytes) => { reported = bytes; }));
+      expect(reported).toBe(0);
     });
   });
 });

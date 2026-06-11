@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { resolveProvider, resolveFallbackModel, resolveUpstreamModel, clearProvidersCache } from '../lib/providers/resolver';
+import { resolveProvider, resolveFallbackModel, resolveUpstreamModel, clearProvidersCache, normalizeUpstreamBase, getUpstreamUrl, getUpstreamCountTokensUrl, getUpstreamResponsesUrl } from '../lib/providers/resolver';
+import type { ProviderConfig } from '../lib/providers/types';
 import {
   saveCustomProvider,
   __adminConfigCacheForTests,
@@ -184,7 +185,7 @@ describe('Custom provider exact match and wildcard prefix routing tests', () => 
   });
 });
 
-import { validateBase64ImageSizes } from '../lib/relay/validation';
+import { validateBase64ImageSizes, validateRequestSize } from '../lib/relay/validation';
 
 describe('base64 image size validation tests', () => {
   it('should pass validation for small base64 images', () => {
@@ -221,5 +222,115 @@ describe('base64 image size validation tests', () => {
     const result = validateBase64ImageSizes(body);
     expect(result.valid).toBe(false);
     expect(result.error).toContain('Base64 image size exceeds the limit of 1MB');
+  });
+});
+
+describe('validateRequestSize (Cloudflare O(1) request-size cap)', () => {
+  const original = process.env.RELAY_MAX_REQUEST_BYTES;
+
+  afterEach(() => {
+    if (original === undefined) {
+      delete process.env.RELAY_MAX_REQUEST_BYTES;
+    } else {
+      process.env.RELAY_MAX_REQUEST_BYTES = original;
+    }
+  });
+
+  it('passes a request under the default 10MB cap', () => {
+    delete process.env.RELAY_MAX_REQUEST_BYTES;
+    const result = validateRequestSize(5 * 1024 * 1024);
+    expect(result.valid).toBe(true);
+    expect(result.error).toBeUndefined();
+  });
+
+  it('passes a request exactly at the default cap', () => {
+    delete process.env.RELAY_MAX_REQUEST_BYTES;
+    const result = validateRequestSize(10 * 1024 * 1024);
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects a request over the default cap with a size message', () => {
+    delete process.env.RELAY_MAX_REQUEST_BYTES;
+    const result = validateRequestSize(10 * 1024 * 1024 + 1);
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('exceeds the limit');
+  });
+
+  it('honors a custom RELAY_MAX_REQUEST_BYTES override', () => {
+    process.env.RELAY_MAX_REQUEST_BYTES = String(1024); // 1KB
+    expect(validateRequestSize(1024).valid).toBe(true);
+    expect(validateRequestSize(1025).valid).toBe(false);
+  });
+
+  it('disables the cap when RELAY_MAX_REQUEST_BYTES=0', () => {
+    process.env.RELAY_MAX_REQUEST_BYTES = '0';
+    const result = validateRequestSize(50 * 1024 * 1024);
+    expect(result.valid).toBe(true);
+  });
+
+  it('falls back to the default cap on an invalid override', () => {
+    process.env.RELAY_MAX_REQUEST_BYTES = 'not-a-number';
+    expect(validateRequestSize(10 * 1024 * 1024).valid).toBe(true);
+    expect(validateRequestSize(10 * 1024 * 1024 + 1).valid).toBe(false);
+  });
+});
+
+describe('upstream URL construction', () => {
+  it('defaults a bare origin to /v1', () => {
+    expect(normalizeUpstreamBase('https://sub.100xlabs.space')).toBe('https://sub.100xlabs.space/v1');
+    expect(normalizeUpstreamBase('https://sub.100xlabs.space/')).toBe('https://sub.100xlabs.space/v1');
+  });
+
+  it('leaves an existing version path untouched', () => {
+    expect(normalizeUpstreamBase('https://api.openai.com/v1')).toBe('https://api.openai.com/v1');
+    expect(normalizeUpstreamBase('https://api.anthropic.com/v1')).toBe('https://api.anthropic.com/v1');
+    expect(normalizeUpstreamBase('https://dashscope.aliyuncs.com/compatible-mode/v1')).toBe('https://dashscope.aliyuncs.com/compatible-mode/v1');
+    expect(normalizeUpstreamBase('https://generativelanguage.googleapis.com/v1beta')).toBe('https://generativelanguage.googleapis.com/v1beta');
+  });
+
+  it('strips trailing slashes from a versioned path', () => {
+    expect(normalizeUpstreamBase('https://relay.example.com/v1/')).toBe('https://relay.example.com/v1');
+  });
+
+  const anthropicBare: ProviderConfig = {
+    name: 'cc',
+    displayName: 'Custom Claude',
+    baseUrl: 'https://sub.100xlabs.space',
+    modelPrefixes: ['claude-'],
+    headerFormat: 'anthropic',
+    envKeyField: 'CC_KEYS',
+  };
+
+  const openaiBare: ProviderConfig = {
+    name: 'oa',
+    displayName: 'Custom OpenAI',
+    baseUrl: 'https://muyuan.do',
+    modelPrefixes: ['gpt-'],
+    headerFormat: 'openai',
+    envKeyField: 'OA_KEYS',
+  };
+
+  it('builds an anthropic /messages URL under /v1 from a bare origin', () => {
+    expect(getUpstreamUrl(anthropicBare)).toBe('https://sub.100xlabs.space/v1/messages');
+    expect(getUpstreamCountTokensUrl(anthropicBare)).toBe('https://sub.100xlabs.space/v1/messages/count_tokens');
+  });
+
+  it('leaves an openai bare origin untouched (root vs /v1 is ambiguous; probed by key-test)', () => {
+    // Unlike Anthropic, OpenAI-compatible gateways (NewAPI et al.) may serve the
+    // API at the root or under /v1. We do not guess here — the base is used
+    // as-is, and the admin key-test route probes both candidates.
+    expect(getUpstreamUrl(openaiBare)).toBe('https://muyuan.do/chat/completions');
+    expect(getUpstreamResponsesUrl(openaiBare)).toBe('https://muyuan.do/responses');
+  });
+
+  it('builds openai URLs from a versioned base as-is', () => {
+    const openaiVersioned: ProviderConfig = { ...openaiBare, baseUrl: 'https://muyuan.do/v1' };
+    expect(getUpstreamUrl(openaiVersioned)).toBe('https://muyuan.do/v1/chat/completions');
+    expect(getUpstreamResponsesUrl(openaiVersioned)).toBe('https://muyuan.do/v1/responses');
+  });
+
+  it('does not double a version prefix when the base already has one', () => {
+    const anthropicVersioned: ProviderConfig = { ...anthropicBare, baseUrl: 'https://api.anthropic.com/v1' };
+    expect(getUpstreamUrl(anthropicVersioned)).toBe('https://api.anthropic.com/v1/messages');
   });
 });

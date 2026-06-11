@@ -113,7 +113,32 @@ export default function CcSwitchImportButton({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error?.message || t.ccSwitchExportFailed);
-      const link = json.links?.[0]?.url;
+      const exported = json.links?.[0];
+      if (!exported) {
+        throw new Error(lang === 'zh' ? '没有生成可导入配置。' : 'No import configuration was generated.');
+      }
+
+      // CC Switch's ccswitch:// deep link rejects `claude-desktop`, so for Claude
+      // App we can't auto-import. Copy the base URL + key instead and guide the
+      // user to add the provider manually in CC Switch.
+      if (selectedTarget.app === 'claude-desktop') {
+        const manualConfig = [
+          `ANTHROPIC_BASE_URL=${exported.endpoint}`,
+          `ANTHROPIC_AUTH_TOKEN=${exported.apiKey}`,
+          exported.model ? `ANTHROPIC_MODEL=${exported.model}` : '',
+        ].filter(Boolean).join('\n');
+
+        await copyText(manualConfig);
+        setMessage({
+          text: lang === 'zh'
+            ? 'CC Switch 暂不支持自动导入 Claude App，已复制 Base URL 与 Key 到剪贴板，请在 CC Switch 中手动添加 Claude App 供应商后粘贴。'
+            : 'CC Switch can\'t auto-import Claude App yet. The base URL and key were copied to your clipboard — add a Claude App provider manually in CC Switch and paste them.',
+          type: 'success',
+        });
+        return;
+      }
+
+      const link = exported.url;
       if (!link) {
         throw new Error(lang === 'zh' ? '没有生成可导入链接。' : 'No import link was generated.');
       }

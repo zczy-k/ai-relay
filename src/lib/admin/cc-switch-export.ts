@@ -77,6 +77,34 @@ function stripTrailingSlash(url: string): string {
   return url.replace(/\/+$/, '');
 }
 
+function isClaudeApp(app: CcSwitchApp): boolean {
+  return app === 'claude' || app === 'claude-desktop';
+}
+
+/**
+ * Shape an exported base URL for the target client.
+ *
+ * Clients disagree on who owns the version prefix:
+ *  - Claude CLI / app append `/v1/messages` to ANTHROPIC_BASE_URL themselves, so
+ *    the exported base must be a bare origin. A base that already carries `/v1`
+ *    (e.g. the built-in anthropic registry entry, or a relay endpoint) would
+ *    otherwise produce `/v1/v1/messages` → 404.
+ *  - OpenAI-style clients (codex/hermes/openclaw) append `/chat/completions`, so
+ *    the base must carry the version prefix.
+ *
+ * The two source modes differ in where the base starts: a relay base is a bare
+ * origin (needs `/v1` added for OpenAI clients), while an upstream provider base
+ * already carries its own version path (`/v1`, `/v1beta`, `/compatible-mode/v1`,
+ * …) and must be left as-is.
+ */
+function endpointForApp(app: CcSwitchApp, base: string, source: 'relay' | 'upstream'): string {
+  const trimmed = stripTrailingSlash(base);
+  if (isClaudeApp(app)) {
+    return trimmed.replace(/\/v1$/, '');
+  }
+  return source === 'relay' ? `${trimmed}/v1` : trimmed;
+}
+
 function base64Json(value: unknown): string {
   const json = JSON.stringify(value);
   if (typeof Buffer !== 'undefined') {
@@ -218,7 +246,7 @@ export function buildCcSwitchExport(options: BuildCcSwitchExportOptions): CcSwit
 
   if (options.mode === 'relay') {
     if (!options.app) throw new Error('app is required for relay export');
-    const relayApiEndpoint = `${relayEndpoint}/v1`;
+    const relayApiEndpoint = endpointForApp(options.app, relayEndpoint, 'relay');
     const providers = Object.values(options.providers);
     const model = options.app === 'claude' || options.app === 'claude-desktop'
       ? pickDefaultModel(providers.find((provider) => provider.headerFormat === 'anthropic') || providers[0])
@@ -247,12 +275,14 @@ export function buildCcSwitchExport(options: BuildCcSwitchExportOptions): CcSwit
     const keyIndex = options.keyHash ? hashes.indexOf(options.keyHash) : 0;
     if (options.keyHash && keyIndex < 0) throw new Error(`Unknown key hash for provider: ${options.providerId}`);
     const index = keyIndex >= 0 ? keyIndex : 0;
-    const endpoint = process.env[provider.envBaseUrlField || ''] || provider.baseUrl;
+    const app = options.app || appDefaultForProvider(provider);
+    const rawEndpoint = process.env[provider.envBaseUrlField || ''] || provider.baseUrl;
+    const endpoint = endpointForApp(app, rawEndpoint, 'upstream');
     return createPayload('provider', [
       buildCcSwitchLink({
         providerId: options.providerId,
         providerName: provider.displayName,
-        app: options.app || appDefaultForProvider(provider),
+        app,
         endpoint,
         apiKey: keys[index],
         keyHash: hashes[index],
@@ -265,11 +295,13 @@ export function buildCcSwitchExport(options: BuildCcSwitchExportOptions): CcSwit
     const keys = options.providerKeys[providerId] || [];
     if (keys.length === 0) continue;
     const hashes = options.keyHashes?.[providerId] || [];
-    const endpoint = process.env[provider.envBaseUrlField || ''] || provider.baseUrl;
+    const app = options.app || appDefaultForProvider(provider);
+    const rawEndpoint = process.env[provider.envBaseUrlField || ''] || provider.baseUrl;
+    const endpoint = endpointForApp(app, rawEndpoint, 'upstream');
     links.push(buildCcSwitchLink({
       providerId,
       providerName: provider.displayName,
-      app: options.app || appDefaultForProvider(provider),
+      app,
       endpoint,
       apiKey: keys[0],
       keyHash: hashes[0],

@@ -159,16 +159,73 @@ export function resolveUpstreamModel(model: string, provider: ProviderConfig): s
   return model;
 }
 
-export function getUpstreamUrl(provider: ProviderConfig): string {
+/**
+ * Normalize an Anthropic provider base URL into one safe to append `/messages`
+ * (and `/messages/count_tokens`) to.
+ *
+ * Anthropic's API contract is unambiguous: the endpoint is always
+ * `/v1/messages`. But base URLs arrive from many sources — built-in registry,
+ * provider templates, cc-switch imports, the admin "custom provider" form — and
+ * not all of them include the `/v1` prefix (the anthropic provider templates
+ * store a bare `https://api.anthropic.com`, and cc-switch deep links carry a
+ * bare origin because the Claude CLI normally appends `/v1/messages` itself). A
+ * bare origin like `https://sub.100xlabs.space` would otherwise build
+ * `https://sub.100xlabs.space/messages`, which on SPA-backed gateways 200s with
+ * the site's index.html instead of the API, and the client fails to parse it.
+ *
+ * Rule: if the base has no path (just an origin, or a trailing `/`), default it
+ * to `/v1`. Any base that already carries a path (`/v1`, `/v1beta`, `/v2`, …) is
+ * left untouched. Trailing slashes are always stripped. Mirrors
+ * normalizeImportedBaseUrl so configured and imported providers behave alike.
+ *
+ * This is intentionally NOT applied to OpenAI-format providers: a bare base for
+ * an OpenAI-compatible gateway (NewAPI et al.) is genuinely ambiguous — the API
+ * may live at the root or under `/v1` — so we leave those untouched and let the
+ * key-test route probe both candidates (see getFallbackOpenAIUrl).
+ */
+export function normalizeUpstreamBase(base: string): string {
+  const trimmed = base.trim().replace(/\/+$/, '');
+  try {
+    const url = new URL(trimmed);
+    if (!url.pathname || url.pathname === '/') {
+      url.pathname = '/v1';
+      return url.toString().replace(/\/+$/, '');
+    }
+  } catch {
+    return trimmed;
+  }
+  return trimmed;
+}
+
+function resolveProviderBase(provider: ProviderConfig): string {
   const customBase = provider.envBaseUrlField
     ? process.env[provider.envBaseUrlField]
     : undefined;
-  const base = customBase || provider.baseUrl;
+  return customBase || provider.baseUrl;
+}
+
+export function getUpstreamUrl(provider: ProviderConfig): string {
+  const base = resolveProviderBase(provider);
 
   if (provider.headerFormat === 'anthropic') {
-    return `${base}/messages`;
+    return `${normalizeUpstreamBase(base)}/messages`;
   }
   return `${base}/chat/completions`;
+}
+
+/**
+ * Get the upstream URL for an Anthropic provider's token-counting endpoint.
+ * Only Anthropic-format upstreams expose /messages/count_tokens; for any other
+ * format we have no real endpoint to forward to (callers fall back to a local
+ * estimate instead). Throws for non-Anthropic providers.
+ */
+export function getUpstreamCountTokensUrl(provider: ProviderConfig): string {
+  if (provider.headerFormat !== 'anthropic') {
+    throw new Error(
+      `count_tokens is only supported for Anthropic-format providers (${provider.displayName}).`
+    );
+  }
+  return `${normalizeUpstreamBase(resolveProviderBase(provider))}/messages/count_tokens`;
 }
 
 /**
@@ -183,10 +240,7 @@ export function getUpstreamResponsesUrl(provider: ProviderConfig): string {
       `Only OpenAI-compatible providers support /v1/responses.`
     );
   }
-  const customBase = provider.envBaseUrlField
-    ? process.env[provider.envBaseUrlField]
-    : undefined;
-  const base = customBase || provider.baseUrl;
+  const base = resolveProviderBase(provider);
   return `${base}/responses`;
 }
 

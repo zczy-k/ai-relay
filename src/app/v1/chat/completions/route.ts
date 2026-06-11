@@ -10,12 +10,13 @@
 // ============================================================
 
 import { NextRequest } from 'next/server';
-import { validateAuth, relayRequest, validateBase64ImageSizes } from '@/lib/relay';
+import { validateAuth, relayRequest, validateBase64ImageSizes, validateRequestSize } from '@/lib/relay';
 import { RelayError } from '@/lib/errors';
 import { createUsageEvent, getBatchRecorder } from '@/lib/usage';
 import { createUsageStorage } from '@/lib/usage/factory';
 import { recordRequestLog } from '@/lib/observability/request-logs';
-import { chunkHasUsage, jsonStringFieldLength } from '@/lib/usage/stream-usage';
+import { chunkHasUsage, jsonStringFieldLength, createByteCountingStream, estimateCompletionTokensFromStreamBytes } from '@/lib/usage/stream-usage';
+import { isCloudflareSync, runAfterResponse } from '@/lib/cf-env';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -215,9 +216,20 @@ export async function POST(request: NextRequest) {
   batchRecorder.setStorage(usageStorage as any);
 
   // 2. Parse request body
+  // On Cloudflare Free we also keep the original request text so the relay can
+  // forward it byte-for-byte to the upstream when the body is unchanged,
+  // skipping a costly re-serialization of large (Claude Code) contexts. The
+  // parse still happens once here for reliable model/stream resolution.
+  const onCloudflare = isCloudflareSync();
   let body;
+  let rawBody: string | undefined;
   try {
-    body = await request.json();
+    if (onCloudflare) {
+      rawBody = await request.text();
+      body = JSON.parse(rawBody);
+    } else {
+      body = await request.json();
+    }
     requestedModel = body?.model;
   } catch {
     return new Response(
@@ -232,13 +244,19 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Validate base64 image sizes
-  const base64Check = validateBase64ImageSizes(body);
-  if (!base64Check.valid) {
+  // Guard against oversized inline payloads (abuse / accidental huge images).
+  // On Vercel: the precise per-image base64 scan. On Cloudflare Free: that deep
+  // scan is O(body) CPU the ~10ms budget can't afford, so swap it for a cheap
+  // O(1) total request-size cap against the raw text length — an oversized
+  // image still pushes the body past the cap and is rejected before relay.
+  const sizeCheck = onCloudflare
+    ? validateRequestSize(rawBody?.length ?? 0)
+    : validateBase64ImageSizes(body);
+  if (!sizeCheck.valid) {
     return new Response(
       JSON.stringify({
         error: {
-          message: base64Check.error,
+          message: sizeCheck.error,
           type: 'invalid_request_error',
           code: 400,
         },
@@ -302,13 +320,67 @@ export async function POST(request: NextRequest) {
   try {
     const startTime = Date.now();
     const userAgent = request.headers.get('user-agent') || undefined;
-    const { response, provider, apiKey } = await relayRequest(body, 'chat', userAgent);
+    const { response, provider, apiKey } = await relayRequest(body, 'chat', userAgent, rawBody);
     const latencyMs = Date.now() - startTime;
 
-    // 5. Stream or return the response
-    if (body.stream) {
+    // 5. Stream or return the response.
+    // Gate on response.ok so upstream error bodies (4xx/5xx) fall through to
+    // the non-streaming path below and are returned as-is — never wrapped as a
+    // text/event-stream and logged as a successful 200.
+    if (body.stream && response.ok && response.body) {
+      // Cloudflare Free (~10ms CPU/request): the precise wrapper is O(response
+      // bytes) and blows the budget on large generations. Pass chunks straight
+      // through, tally only byte length, and estimate completion tokens once —
+      // trading usage precision for near-constant per-byte CPU. Vercel keeps the
+      // exact wrapper below.
+      if (isCloudflareSync()) {
+        const cfBody = createByteCountingStream(response.body, (totalBytes) => {
+          // Schedule usage recording in the background so slow D1/log writes
+          // don't delay the client's stream close. See runAfterResponse.
+          const completionTokens = estimateCompletionTokensFromStreamBytes(totalBytes);
+          const recordLatencyMs = Date.now() - startTime;
+          const event = createUsageEvent({
+            provider: provider.name,
+            model: body.model,
+            apiKeyHash: apiKey.hash,
+            statusCode: 200,
+            promptTokens: estimatedPromptTokens,
+            completionTokens,
+            latencyMs: recordLatencyMs,
+            isStream: true,
+          });
+          runAfterResponse(async () => {
+            await batchRecorder.record(event);
+            await recordRequestLog({
+              traceId,
+              timestamp: new Date().toISOString(),
+              apiKeyHash: apiKey.hash,
+              model: body.model,
+              provider: provider.name,
+              status: 'success',
+              httpStatus: 200,
+              latencyMs: recordLatencyMs,
+              promptTokens: estimatedPromptTokens,
+              completionTokens,
+              totalTokens: estimatedPromptTokens + completionTokens,
+              isStream: true,
+            });
+          });
+        });
+        return new Response(cfBody, {
+          status: response.status,
+          headers: {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-Relay-Provider': provider.name,
+            'X-Relay-Key': apiKey.hash,
+          },
+        });
+      }
+
       const wrappedBody = wrapStreamWithUsageTracking(
-        response.body!,
+        response.body,
         apiKey.hash,
         provider.name,
         body.model,

@@ -8,6 +8,18 @@
 
 （暂无）
 
+## [2.13.0] - 2026-06-11
+
+### Added
+- **Anthropic Messages API 支持**：新增 `/v1/messages` 端点，Claude CLI / Claude Desktop App 可直接对接 Relay，无需转换协议。支持流式和非流式响应。
+
+### Fixed
+- **上游 /v1 路径规范化**：修复 bare-origin Claude Provider（无 `/v1` 后缀）请求路径拼接错误的问题。
+- **Claude Desktop 导出修复**：修复 Admin 后台 Claude App 配置导出使用无效深度链接的问题，改为复制原始配置。
+
+### Changed
+- **Cloudflare Free 性能优化**：精简每次请求的 CPU 开销，确保在 Cloudflare Free 免费 CPU 限制内稳定运行。
+
 ## [2.12.0] - 2026-06-08
 
 ### Added

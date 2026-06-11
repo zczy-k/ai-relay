@@ -67,3 +67,38 @@ export function isCloudflareSync(): boolean {
 export async function isCloudflare(): Promise<boolean> {
   return (await getCFEnv()) !== null;
 }
+
+/**
+ * Run best-effort background work without blocking the response.
+ *
+ * On Cloudflare, the runtime suspends as soon as the response stream closes,
+ * so awaiting slow usage/log writes before `controller.close()` delays the
+ * client's stream completion. Handing the promise to `ctx.waitUntil` lets the
+ * worker stay alive for the write while the client sees the stream finish
+ * immediately. Off CF (or when no context is available) it degrades to plain
+ * fire-and-forget. Errors are always swallowed — this is never load-bearing.
+ */
+export function runAfterResponse(work: () => Promise<void>): void {
+  let promise: Promise<void>;
+  try {
+    promise = work();
+  } catch {
+    // Synchronous throw in the work factory — nothing to wait on.
+    return;
+  }
+  const settled = promise.catch(() => {});
+
+  if (shouldSkipCloudflareContext()) {
+    return; // Vercel / Node.js: fire-and-forget.
+  }
+
+  try {
+    const { getCloudflareContext } = require('@opennextjs/cloudflare');
+    const context = getCloudflareContext();
+    if (context && typeof context.ctx?.waitUntil === 'function') {
+      context.ctx.waitUntil(settled);
+    }
+  } catch {
+    // No CF context — the fire-and-forget promise above still runs.
+  }
+}
