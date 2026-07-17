@@ -88,7 +88,7 @@ export async function getRoutingConfig(): Promise<RoutingConfig> {
  */
 export async function isSmartRoutingConfigured(): Promise<boolean> {
   const config = await getRoutingConfig();
-  return config.updatedAt > 0;
+  return config.enabled && config.updatedAt > 0;
 }
 
 /**
@@ -118,6 +118,7 @@ export async function saveRoutingConfig(config: Partial<RoutingConfig>): Promise
 
 function getDefaultConfig(): RoutingConfig {
   return {
+    enabled: false,
     strategy: 'latency',
     costWeights: [],
     maxLatencyMs: 2000,
@@ -126,6 +127,7 @@ function getDefaultConfig(): RoutingConfig {
     stickySession: false,
     providerTimeoutMs: {},
     maxRetries: 3,
+    preferredProviderTolerancePercent: 20,
     updatedAt: 0,
   };
 }
@@ -219,29 +221,50 @@ export function hasRecovered(provider: string, config?: RoutingConfig): boolean 
  * This is the main entry point called from the relay.
  *
  * @param requestedProvider  The provider originally resolved from the model name
- * @param providerHealthMap  Optional pre-built health map (for efficiency)
+ * @param requestedModel     The alias-resolved model being requested. Used to
+ *                           restrict the candidate pool to providers that
+ *                           actually serve this model — smart routing must never
+ *                           switch a claude-* request onto a gpt-only provider.
+ * @param providerHealthMap  Optional pre-built health map (for efficiency). When
+ *                           supplied, the caller is responsible for having
+ *                           already filtered it to model-compatible providers.
  * @returns Routing decision
  */
 export async function smartRoute(
   requestedProvider: string,
+  requestedModel: string,
   providerHealthMap?: Map<string, ProviderHealthInfo>
 ): Promise<RoutingDecision> {
   const config = await getRoutingConfig();
 
   if (!providerHealthMap) {
     providerHealthMap = new Map();
-    const { getAllProviders } = await import('../providers');
+    const { getAllProviders, providerSupportsModel } = await import('../providers');
     const allProviders = await getAllProviders();
     const { getKeyPoolStats } = await import('../relay/key-pool');
     const poolStats = getKeyPoolStats() as Record<string, { total: number; available: number }>;
 
-    for (const [name, p] of Object.entries(allProviders)) {
+    const lowerModel = requestedModel.toLowerCase();
+    const healthPromises = Object.entries(allProviders).map(async ([name, p]) => {
+      // Only consider providers that can actually serve the requested model.
+      // The originally-resolved provider is always included so the request has
+      // a valid home even if matching is stricter than resolveProvider's.
+      if (name !== requestedProvider && !providerSupportsModel(p, lowerModel)) {
+        return null;
+      }
       const health = await getProviderHealth(name, p.displayName);
       const stats = poolStats[name];
       if (stats) {
         health.availableKeys = stats.available;
         health.totalKeys = stats.total;
       }
+      return [name, health] as const;
+    });
+
+    const healthEntries = (await Promise.all(healthPromises)).filter(
+      (entry): entry is readonly [string, ProviderHealthInfo] => entry !== null
+    );
+    for (const [name, health] of healthEntries) {
       providerHealthMap.set(name, health);
     }
   }

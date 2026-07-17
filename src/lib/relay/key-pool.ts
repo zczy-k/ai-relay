@@ -67,8 +67,9 @@ function parseKeys(envValue: string | undefined, provider: string): ApiKey[] {
  */
 async function loadManagedKeys(providerName: string, forceRefresh = false): Promise<ApiKey[] | null | undefined> {
   try {
-    const { getManagedKeys } = await import('../admin/admin-config');
-    const managed = await getManagedKeys(providerName, forceRefresh);
+    const { getDefaultConfigStore } = await import('../config-store');
+    const store = getDefaultConfigStore();
+    const managed = await store.getProviderKeys(providerName);
     if (managed === undefined) return undefined;
     if (managed !== null) {
       return managed.map((key) => ({
@@ -85,8 +86,9 @@ async function loadManagedKeys(providerName: string, forceRefresh = false): Prom
 
 async function loadManagedKeysVersion(providerName: string): Promise<number | undefined> {
   try {
-    const { getManagedKeysVersion } = await import('../admin/admin-config');
-    const version = await getManagedKeysVersion(providerName);
+    const { getDefaultConfigStore } = await import('../config-store');
+    const store = getDefaultConfigStore();
+    const version = await store.getConfigVersion();
     if (version === undefined) return undefined;
     return version;
   } catch {

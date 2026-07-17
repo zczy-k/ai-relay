@@ -11,6 +11,7 @@
 
 import { NextRequest } from 'next/server';
 import { validateAuth, relayRequest } from '@/lib/relay';
+import { collectPassthroughHeaders } from '@/lib/relay/passthrough';
 import { RelayError } from '@/lib/errors';
 import { createUsageEvent } from '@/lib/usage';
 import { createUsageStorage } from '@/lib/usage/factory';
@@ -373,7 +374,8 @@ export async function POST(request: NextRequest) {
   try {
     const startTime = Date.now();
     const userAgent = request.headers.get('user-agent') || undefined;
-    const { response, provider, apiKey } = await relayRequest(body, 'responses', userAgent, rawBody);
+    const passthroughHeaders = collectPassthroughHeaders(request.headers);
+    const { response, provider, apiKey } = await relayRequest(body, 'responses', userAgent, rawBody, passthroughHeaders);
     const latencyMs = Date.now() - startTime;
 
     // 5. Stream or return the response

@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { detectPriorityRuleConflicts } from '@/lib/admin/priority-rules-core';
 import type { PriorityRule, PriorityRuleConflict, ProviderInfo } from '../types';
+import HelpIcon from './HelpIcon';
 
 export function movePriorityRule<T>(rules: T[], fromIndex: number, toIndex: number): T[] {
   if (fromIndex < 0 || fromIndex >= rules.length || toIndex < 0 || toIndex >= rules.length) {
@@ -233,7 +234,24 @@ export default function PriorityRulesTab({
     <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
         <div>
-          <h2 style={{ margin: 0, color: '#fff' }}>优先级规则</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <h2 style={{ margin: 0, color: '#fff' }}>优先级规则</h2>
+            <HelpIcon tooltip={`解决多个供应商支持相同模型前缀时，首选哪一个的问题。
+
+工作方式：
+• 按从上到下的顺序，第一条命中的规则生效
+• 规则的 Provider 顺序中，第一个可用的供应商作为首选
+• 其余供应商自动作为该请求的故障转移链（失败后依次尝试）
+
+示例：
+claude-* → [100xlabs, muyuan, anthropic]
+→ 优先用 100xlabs
+→ 失败后依次尝试 muyuan、anthropic
+
+注意：
+⚠️ 开启智能路由后，本功能将被忽略
+⚠️ 与故障转移链同属传统模式，两者协同生效`} />
+          </div>
           <p style={{ margin: '0.25rem 0 0', color: '#9ca3af', fontSize: '0.9rem' }}>
             拖拽/箭头排序，第一条命中的规则优先生效，最多 20 条。
           </p>

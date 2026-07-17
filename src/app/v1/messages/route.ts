@@ -7,6 +7,7 @@
 import { NextRequest } from 'next/server';
 import { validateAuth, relayRequest } from '@/lib/relay';
 import { transformOpenAIToAnthropic } from '@/lib/relay/transform';
+import { collectPassthroughHeaders } from '@/lib/relay/passthrough';
 import { RelayError } from '@/lib/errors';
 import { createUsageEvent, getBatchRecorder } from '@/lib/usage';
 import { createUsageStorage } from '@/lib/usage/factory';
@@ -451,22 +452,6 @@ function wrapOpenAIStreamToAnthropic(
   });
 }
 
-/**
- * Collect client-supplied Anthropic headers worth forwarding to an Anthropic
- * upstream. Claude CLI / Claude app gate features (prompt caching, interleaved
- * thinking, fine-grained tool streaming, …) behind `anthropic-beta`, and pin
- * the API version via `anthropic-version`. Forwarding them keeps those features
- * working on the native path; on the OpenAI-translation path they are ignored.
- */
-function collectAnthropicPassthroughHeaders(request: NextRequest): Record<string, string> {
-  const out: Record<string, string> = {};
-  const beta = request.headers.get('anthropic-beta');
-  if (beta) out['anthropic-beta'] = beta;
-  const version = request.headers.get('anthropic-version');
-  if (version) out['anthropic-version'] = version;
-  return out;
-}
-
 function validateBody(body: Partial<AnthropicMessagesRequest>): string | null {
   if (!body.model || typeof body.model !== 'string') {
     return 'Missing required field: model.';
@@ -536,7 +521,7 @@ export async function POST(request: NextRequest) {
   try {
     const startTime = Date.now();
     const userAgent = request.headers.get('user-agent') || undefined;
-    const passthroughHeaders = collectAnthropicPassthroughHeaders(request);
+    const passthroughHeaders = collectPassthroughHeaders(request.headers);
     const { response, provider, apiKey } = await relayRequest(body, 'anthropicMessages', userAgent, rawBody, passthroughHeaders);
     const latencyMs = Date.now() - startTime;
 

@@ -133,12 +133,23 @@ export async function routeByStrategy(
   // Sort by score (ascending — lower is better)
   scored.sort((a, b) => a.score - b.score);
 
-  // If preferred provider is available and not down, promote to first position
+  // Keep the originally-resolved provider when it is "good enough": available
+  // (not down) and scoring within preferredProviderTolerancePercent of the best
+  // candidate. This avoids churning the route on marginal differences while
+  // still switching away when another provider is meaningfully better. With a
+  // tolerance of 0 the preferred provider is only kept on an exact tie.
   if (preferredProvider) {
     const preferredIdx = scored.findIndex((s) => s.provider === preferredProvider);
     if (preferredIdx > 0) {
       const preferredHealth = healthData.get(preferredProvider);
-      if (preferredHealth && preferredHealth.status !== 'down') {
+      const bestScore = scored[0].score;
+      const preferredScore = scored[preferredIdx].score;
+      const tolerance = 1 + (config.preferredProviderTolerancePercent ?? 20) / 100;
+      if (
+        preferredHealth &&
+        preferredHealth.status !== 'down' &&
+        (bestScore <= 0 || preferredScore <= bestScore * tolerance)
+      ) {
         const entry = scored.splice(preferredIdx, 1)[0];
         scored.unshift(entry);
       }

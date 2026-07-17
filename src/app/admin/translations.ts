@@ -307,6 +307,22 @@ export const TRANSLATIONS = {
 
     // Fallback Chain
     fallbackChainTitle: '🔗 故障转移（回退）链',
+    fallbackChainHelp: `当前供应商失败后，在单次请求内依次尝试的备用供应商。
+
+工作方式：
+• 主供应商重试耗尽后，按顺序尝试链中的每个供应商
+• 支持指定模型，格式为 provider:model
+• 同一请求内不会重复尝试同一供应商（防止死循环）
+• 保存时会检测循环配置并拒绝
+
+示例：
+[muyuan, deepseek:deepseek-v4-flash]
+→ 主供应商失败后尝试 muyuan（沿用原模型）
+→ 仍失败则尝试 deepseek，并改用 deepseek-v4-flash
+
+注意：
+⚠️ 开启智能路由后，本配置将被忽略
+⚠️ 若命中优先级规则，会优先使用规则的 Provider 顺序作为回退链`,
     kvFallbackActive: '🟢 KV 回退链已激活：自定义优先级链已存储在 KV 中。',
     kvFallbackStatic: '⚪ 正在使用静态默认值：在系统配置文件中定义。',
     modelSelectorAuto: '自动 (Auto)',
@@ -316,6 +332,36 @@ export const TRANSLATIONS = {
     btnResetFallbacks: '重置为默认',
     confirmResetFallbacks: '您确定要将回退链重置为系统静态默认值吗？',
     btnSaveFallbacks: '保存回退链',
+    fallbackChainSubtitle: '选择供应商后配置其故障转移链',
+    fallbackProviderLabel: '配置供应商：',
+    fallbackProviderPlaceholder: '— 选择供应商 —',
+    fallbackSelectProviderHint: '👆 请先选择一个供应商以配置其故障转移链',
+
+    // Routing Policy Tab
+    routingPolicyTitle: '🧭 路由策略',
+    routingModeLabel: '路由模式',
+    routingModeTraditional: '传统模式',
+    routingModeTraditionalDesc: '优先级规则 + 故障转移链',
+    routingModeSmart: '智能路由',
+    routingModeSmartDesc: '基于延迟/成本动态择优',
+    routingModeMutexWarning: '⚠️ 两种模式互斥：同一时间只有一种生效',
+    routingTraditionalSectionTitle: '传统模式配置',
+    routingTraditionalPriorityTitle: '📌 优先级规则',
+    routingTraditionalPriorityDesc: '解决多供应商模型冲突，规则的 Provider 顺序作为故障转移链',
+    routingTraditionalFallbackTitle: '🔗 供应商故障转移',
+    routingTraditionalFallbackDesc: '无匹配优先级规则时的兜底故障转移链',
+    routingSmartSectionTitle: '智能路由配置',
+    smartRoutingHelp: `智能路由会在支持当前模型的供应商之间，根据延迟、成本或可用性自动选择最优供应商。
+
+启用后：
+✅ 仅评估支持该模型的供应商
+✅ 基于实时指标动态选择主供应商
+✅ 自带智能故障转移链（单次请求内可切换）
+
+注意：
+⚠️ 与「优先级规则 + 故障转移链」互斥
+⚠️ 启用智能路由后，上述两项配置将被忽略`,
+
     msgKeyAdded: 'API 密钥添加成功',
     msgKeysAddedBatch: '批量添加完成：新增 {added} 个，重复 {duplicates} 个，当前共 {total} 个。',
     msgKeyDeleted: 'API 密钥删除成功',
@@ -639,6 +685,21 @@ export const TRANSLATIONS = {
 
     // Fallback Chain
     fallbackChainTitle: '🔗 Fallback Chain',
+    fallbackChainHelp: `Backup providers tried, in order, when the primary provider fails within a single request.
+
+How it works:
+• On primary failure, each entry is tried in turn until one succeeds
+• Supports pinning a model with the provider:model format
+• Built-in loop protection: a provider already attempted in this request is skipped
+
+Example:
+[muyuan, deepseek:deepseek-v4-flash]
+→ On primary failure, try muyuan (same model)
+→ Then deepseek using deepseek-v4-flash
+
+Note:
+⚠️ Ignored while Smart Routing is enabled
+⚠️ A matching priority rule's provider order takes precedence over this chain`,
     kvFallbackActive: '🟢 KV fallback chain active: Custom priority chain is stored in KV.',
     kvFallbackStatic: '⚪ Using static defaults: Defined in system config files.',
     modelSelectorAuto: 'Auto',
@@ -648,6 +709,36 @@ export const TRANSLATIONS = {
     btnResetFallbacks: 'Reset to Default',
     confirmResetFallbacks: 'Are you sure you want to reset fallbacks to static defaults?',
     btnSaveFallbacks: 'Save Chain',
+    fallbackChainSubtitle: 'Select a provider to configure its fallback chain',
+    fallbackProviderLabel: 'Configure Provider:',
+    fallbackProviderPlaceholder: '— Select a provider —',
+    fallbackSelectProviderHint: '👆 Please select a provider to configure its fallback chain',
+
+    // Routing Policy Tab
+    routingPolicyTitle: '🧭 Routing Policy',
+    routingModeLabel: 'Routing Mode',
+    routingModeTraditional: 'Traditional',
+    routingModeTraditionalDesc: 'Priority rules + fallback chains',
+    routingModeSmart: 'Smart Routing',
+    routingModeSmartDesc: 'Dynamic provider selection by latency/cost',
+    routingModeMutexWarning: '⚠️ Modes are mutually exclusive: only one is active at a time',
+    routingTraditionalSectionTitle: 'Traditional Mode Configuration',
+    routingTraditionalPriorityTitle: '📌 Priority Rules',
+    routingTraditionalPriorityDesc: 'Resolve multi-provider model conflicts; rule provider order becomes the fallback chain',
+    routingTraditionalFallbackTitle: '🔗 Provider Fallback Chains',
+    routingTraditionalFallbackDesc: 'Fallback chains used when no priority rule matches',
+    routingSmartSectionTitle: 'Smart Routing Configuration',
+    smartRoutingHelp: `Smart routing automatically selects the optimal provider — among those supporting the requested model — based on latency, cost, or availability.
+
+When enabled:
+✅ Only evaluates providers that support the model
+✅ Dynamically picks the primary provider from real-time metrics
+✅ Includes an intelligent failover chain (can switch within a single request)
+
+Note:
+⚠️ Mutually exclusive with "Priority Rules + Fallback Chain"
+⚠️ When enabled, those two configs are ignored`,
+
     msgKeyAdded: 'API Key added successfully',
     msgKeysAddedBatch: 'Bulk add complete: {added} added, {duplicates} duplicates, {total} total.',
     msgKeyDeleted: 'API Key removed successfully',

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { transformAnthropicToOpenAI, transformOpenAIToAnthropic } from '../lib/relay/transform';
-import { savePriorityRules } from '../lib/admin/admin-config';
+import { transformAnthropicMessageToOpenAIChat, transformAnthropicToOpenAI, transformOpenAIToAnthropic } from '../lib/relay/transform';
+import { clearFallbackChain, savePriorityRules, setFallbackChain } from '../lib/admin/admin-config';
 
 describe('Anthropic-to-OpenAI Payload Translation', () => {
   it('should translate basic Anthropic request to OpenAI format', () => {
@@ -215,6 +215,153 @@ describe('Anthropic-to-OpenAI Payload Translation', () => {
     expect(output.content).toEqual([
       { type: 'tool_use', id: 'call_abc', name: 'get_weather', input: { location: 'SF' } },
     ]);
+  });
+
+  it('should translate Anthropic message responses to OpenAI chat completions', () => {
+    const anthropicResponse = {
+      id: 'msg_123',
+      content: [
+        { type: 'text', text: 'Let me check.' },
+        { type: 'tool_use', id: 'toolu_1', name: 'get_weather', input: { location: 'SF' } },
+      ],
+      stop_reason: 'tool_use',
+      usage: { input_tokens: 12, output_tokens: 7 },
+    };
+
+    const output = transformAnthropicMessageToOpenAIChat(anthropicResponse, 'gpt-5.5');
+
+    expect(output.id).toBe('msg_123');
+    expect(output.object).toBe('chat.completion');
+    expect(output.model).toBe('gpt-5.5');
+    expect(output.choices[0].message.content).toBe('Let me check.');
+    expect(output.choices[0].message.tool_calls).toEqual([
+      {
+        id: 'toolu_1',
+        type: 'function',
+        function: { name: 'get_weather', arguments: JSON.stringify({ location: 'SF' }) },
+      },
+    ]);
+    expect(output.choices[0].finish_reason).toBe('tool_calls');
+    expect(output.usage).toEqual({ prompt_tokens: 12, completion_tokens: 7, total_tokens: 19 });
+  });
+});
+
+describe('OpenAI Chat to Anthropic Fallback Transparency', () => {
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.restoreAllMocks();
+    vi.stubEnv('NODE_ENV', 'test');
+    vi.stubEnv('RELAY_API_KEY', 'relay-test-key');
+    vi.stubEnv('OPENAI_KEYS', 'openai-upstream-key');
+    vi.stubEnv('CLAUDE_KEYS', 'anthropic-upstream-key');
+    vi.stubEnv('RELAY_DAILY_LIMIT', '0');
+    vi.stubEnv('RELAY_MONTHLY_LIMIT', '0');
+    await clearFallbackChain('anthropic');
+    await setFallbackChain('openai', ['anthropic']);
+  });
+
+  function chatReq(body: unknown, key = 'relay-test-key') {
+    return new NextRequest('http://localhost/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it('should return OpenAI JSON shape when a GPT request falls back to Anthropic', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('openai unavailable', { status: 502 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: 'msg_fallback',
+        type: 'message',
+        role: 'assistant',
+        model: 'claude-sonnet-4-6',
+        content: [{ type: 'text', text: 'hello from fallback' }],
+        stop_reason: 'end_turn',
+        usage: { input_tokens: 6, output_tokens: 4 },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { POST } = await import('../app/v1/chat/completions/route');
+    const res = await POST(chatReq({
+      model: 'gpt-5.5',
+      messages: [{ role: 'user', content: 'hi' }],
+    }));
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('X-Relay-Provider')).toBe('anthropic');
+
+    const json = await res.json();
+    expect(json.object).toBe('chat.completion');
+    expect(json.model).toBe('gpt-5.5');
+    expect(json.choices[0].message).toEqual({ role: 'assistant', content: 'hello from fallback' });
+    expect(json.choices[0].finish_reason).toBe('stop');
+    expect(json.usage).toEqual({ prompt_tokens: 6, completion_tokens: 4, total_tokens: 10 });
+
+    const fallbackCall = (fetchMock.mock.calls as any[])[1];
+    expect(String(fallbackCall[0])).toBe('https://api.anthropic.com/v1/messages');
+    expect(JSON.parse(fallbackCall[1].body as string).model).toBe('claude-sonnet-4-6');
+  });
+
+  it('should return OpenAI SSE chunks when a streaming GPT request falls back to Anthropic', async () => {
+    const anthropicSse = [
+      'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_stream","type":"message","role":"assistant","model":"claude-sonnet-4-6","content":[],"usage":{"input_tokens":5,"output_tokens":0}}}\n\n',
+      'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n',
+      'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hel"}}\n\n',
+      'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"lo"}}\n\n',
+      'event: content_block_stop\ndata: {"type":"content_block_stop","index":0}\n\n',
+      'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":2}}\n\n',
+      'event: message_stop\ndata: {"type":"message_stop"}\n\n',
+    ];
+    const stream = new ReadableStream({
+      start(controller) {
+        const encoder = new TextEncoder();
+        for (const chunk of anthropicSse) controller.enqueue(encoder.encode(chunk));
+        controller.close();
+      },
+    });
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('openai unavailable', { status: 502 }))
+      .mockResolvedValueOnce(new Response(stream, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { POST } = await import('../app/v1/chat/completions/route');
+    const res = await POST(chatReq({
+      model: 'gpt-5.5',
+      messages: [{ role: 'user', content: 'hi' }],
+      stream: true,
+    }));
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toBe('text/event-stream');
+    expect(res.headers.get('X-Relay-Provider')).toBe('anthropic');
+
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let resultText = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      resultText += decoder.decode(value);
+    }
+
+    expect(resultText).toContain('"object":"chat.completion.chunk"');
+    expect(resultText).toContain('"role":"assistant"');
+    expect(resultText).toContain('"content":"hel"');
+    expect(resultText).toContain('"content":"lo"');
+    expect(resultText).toContain('"finish_reason":"stop"');
+    expect(resultText).toContain('"prompt_tokens":5');
+    expect(resultText).toContain('"completion_tokens":2');
+    expect(resultText.trim().endsWith('data: [DONE]')).toBe(true);
   });
 });
 

@@ -2,7 +2,7 @@
 // AI API Relay — Request Transformation
 // ============================================================
 
-import type { ChatCompletionRequest } from '../types';
+import type { ChatCompletionRequest, ChatCompletionResponse } from '../types';
 
 /**
  * Transform OpenAI-format request to Anthropic format.
@@ -95,20 +95,14 @@ function defaultUserAgent(headerFormat: 'openai' | 'anthropic' | 'azure'): strin
 }
 
 /**
- * Client headers we forward verbatim to an Anthropic-format upstream so that
- * Claude CLI / Claude app features (prompt caching, interleaved thinking,
- * fine-grained tool streaming, …) keep working. These are gated by
- * `anthropic-beta`, and the client also pins the API version it speaks.
- */
-const FORWARDED_ANTHROPIC_HEADERS = ['anthropic-beta', 'anthropic-version'];
-
-/**
  * Build upstream request headers based on provider format.
  *
- * `passthroughHeaders` carries select client headers (e.g. `anthropic-beta`)
- * that must reach an Anthropic upstream unchanged. They are only applied for
- * the `anthropic` header format; for OpenAI/Azure upstreams they are ignored
- * because they carry no meaning there.
+ * `passthroughHeaders` carries client headers that should reach the upstream
+ * unchanged. For Anthropic upstreams, this includes anthropic-beta, x-app,
+ * x-claude-code-session-id, x-stainless-*, anthropic-dangerous-direct-browser-access,
+ * etc. — all headers that help the upstream identify client context and enable features.
+ * For OpenAI/Azure upstreams, passthroughHeaders are still forwarded (e.g. for
+ * x-stainless-* SDK tracking), but Anthropic-specific headers are harmless noise.
  */
 export function buildHeaders(
   headerFormat: 'openai' | 'anthropic' | 'azure',
@@ -135,11 +129,12 @@ export function buildHeaders(
     headers['Accept'] = 'text/event-stream';
   }
 
-  // Forward client-supplied Anthropic headers (anthropic-beta / anthropic-version)
-  // to Anthropic upstreams. A client-pinned version overrides our default above.
-  if (headerFormat === 'anthropic' && passthroughHeaders) {
-    for (const name of FORWARDED_ANTHROPIC_HEADERS) {
-      const value = passthroughHeaders[name];
+  // Forward all client-supplied headers to the upstream.
+  // The caller (route handler) already filtered out sensitive/conflicting headers
+  // like Authorization, Host, Content-Length, etc. A client-pinned anthropic-version
+  // overrides our default above.
+  if (passthroughHeaders) {
+    for (const [name, value] of Object.entries(passthroughHeaders)) {
       if (value) headers[name] = value;
     }
   }
@@ -449,6 +444,80 @@ export function transformOpenAIToAnthropic(
     usage: {
       input_tokens: openAiResponse.usage?.prompt_tokens || 0,
       output_tokens: openAiResponse.usage?.completion_tokens || 0,
+    },
+  };
+}
+
+export function mapAnthropicStopReasonToOpenAI(stopReason: string | null | undefined): string | null {
+  if (!stopReason) return null;
+  const map: Record<string, string> = {
+    end_turn: 'stop',
+    max_tokens: 'length',
+    stop_sequence: 'stop',
+    tool_use: 'tool_calls',
+  };
+  return map[stopReason] || 'stop';
+}
+
+/**
+ * Transform an Anthropic message response to OpenAI Chat Completions format.
+ *
+ * This keeps OpenAI-compatible clients insulated from a fallback to an
+ * Anthropic-format upstream. Text blocks are concatenated into message.content,
+ * and tool_use blocks are translated to OpenAI tool_calls.
+ */
+export function transformAnthropicMessageToOpenAIChat(
+  anthropicResponse: Record<string, any>,
+  model: string
+): ChatCompletionResponse {
+  const toolCalls: any[] = [];
+  let text = '';
+
+  for (const part of anthropicResponse.content || []) {
+    if (!part || typeof part !== 'object') continue;
+    if (part.type === 'text' && typeof part.text === 'string') {
+      text += part.text;
+    } else if (part.type === 'tool_use') {
+      toolCalls.push({
+        id: part.id || `call_${Date.now().toString(36)}_${toolCalls.length}`,
+        type: 'function',
+        function: {
+          name: part.name || '',
+          arguments: JSON.stringify(part.input ?? {}),
+        },
+      });
+    }
+  }
+
+  const finishReason = anthropicResponse.stop_reason
+    ? mapAnthropicStopReasonToOpenAI(anthropicResponse.stop_reason)
+    : null;
+
+  const promptTokens = anthropicResponse.usage?.input_tokens || 0;
+  const completionTokens = anthropicResponse.usage?.output_tokens || 0;
+
+  const message: ChatCompletionResponse['choices'][number]['message'] = {
+    role: 'assistant',
+    content: text || null,
+  };
+  if (toolCalls.length > 0) message.tool_calls = toolCalls;
+
+  return {
+    id: anthropicResponse.id || `chatcmpl_${Date.now().toString(36)}`,
+    object: 'chat.completion',
+    created: Math.floor(Date.now() / 1000),
+    model,
+    choices: [
+      {
+        index: 0,
+        message,
+        finish_reason: finishReason,
+      },
+    ],
+    usage: {
+      prompt_tokens: promptTokens,
+      completion_tokens: completionTokens,
+      total_tokens: promptTokens + completionTokens,
     },
   };
 }

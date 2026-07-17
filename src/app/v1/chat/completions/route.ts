@@ -11,6 +11,8 @@
 
 import { NextRequest } from 'next/server';
 import { validateAuth, relayRequest, validateBase64ImageSizes, validateRequestSize } from '@/lib/relay';
+import { collectPassthroughHeaders } from '@/lib/relay/passthrough';
+import { mapAnthropicStopReasonToOpenAI, transformAnthropicMessageToOpenAIChat } from '@/lib/relay/transform';
 import { RelayError } from '@/lib/errors';
 import { createUsageEvent, getBatchRecorder } from '@/lib/usage';
 import { createUsageStorage } from '@/lib/usage/factory';
@@ -152,6 +154,200 @@ function wrapStreamWithUsageTracking(
         } catch {
           // Not valid JSON, skip
         }
+      }
+    },
+    cancel() {
+      reader.cancel().catch(() => {});
+    },
+  });
+}
+
+/**
+ * Translate Anthropic message SSE into OpenAI chat-completion SSE while also
+ * tracking usage. This keeps OpenAI-compatible clients insulated from a
+ * fallback to an Anthropic-format upstream.
+ */
+function wrapAnthropicStreamToOpenAI(
+  upstreamBody: ReadableStream<Uint8Array>,
+  apiKeyHash: string,
+  providerName: string,
+  model: string,
+  startTime: number,
+  requestPromptTokens: number,
+  traceId: string
+): ReadableStream<Uint8Array> {
+  const reader = upstreamBody.getReader();
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  let buffer = '';
+  let responseId = `chatcmpl_${Date.now().toString(36)}`;
+  const created = Math.floor(Date.now() / 1000);
+  let sentRole = false;
+  let recorded = false;
+  let inputTokensFromUsage: number | null = null;
+  let outputTokensFromUsage: number | null = null;
+  let accumulatedContentChars = 0;
+  let finalFinishReason: string | null = null;
+  const toolBlocks = new Map<number, { toolCallIndex: number; id: string; name: string }>();
+  let nextToolCallIndex = 0;
+
+  async function recordUsage(promptTokens: number, completionTokens: number): Promise<void> {
+    if (recorded) return;
+    recorded = true;
+    const latencyMs = Date.now() - startTime;
+    const event = createUsageEvent({
+      provider: providerName,
+      model,
+      apiKeyHash,
+      statusCode: 200,
+      promptTokens,
+      completionTokens,
+      latencyMs,
+      isStream: true,
+    });
+    await batchRecorder.record(event);
+    await recordRequestLog({
+      traceId,
+      timestamp: new Date().toISOString(),
+      apiKeyHash,
+      model,
+      provider: providerName,
+      status: 'success',
+      httpStatus: 200,
+      latencyMs,
+      promptTokens,
+      completionTokens,
+      totalTokens: promptTokens + completionTokens,
+      isStream: true,
+    });
+  }
+
+  function chunk(delta: Record<string, unknown>, finishReason: string | null = null, usage?: Record<string, number>): Uint8Array {
+    const payload: Record<string, unknown> = {
+      id: responseId,
+      object: 'chat.completion.chunk',
+      created,
+      model,
+      choices: [
+        {
+          index: 0,
+          delta,
+          finish_reason: finishReason,
+        },
+      ],
+    };
+    if (usage) payload.usage = usage;
+    return encoder.encode(`data: ${JSON.stringify(payload)}\n\n`);
+  }
+
+  function ensureRole(controller: ReadableStreamDefaultController<Uint8Array>) {
+    if (sentRole) return;
+    sentRole = true;
+    controller.enqueue(chunk({ role: 'assistant' }));
+  }
+
+  return new ReadableStream({
+    async start(controller) {
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            const finalPromptTokens = inputTokensFromUsage ?? requestPromptTokens;
+            const finalCompletionTokens = outputTokensFromUsage ?? estimateTokensFromChars(accumulatedContentChars);
+            try {
+              await recordUsage(finalPromptTokens, finalCompletionTokens);
+            } catch (error) {
+              console.error('[Usage] anthropic-to-openai stream recordUsage failed:', error);
+            }
+            ensureRole(controller);
+            controller.enqueue(chunk({}, finalFinishReason || 'stop', {
+              prompt_tokens: finalPromptTokens,
+              completion_tokens: finalCompletionTokens,
+              total_tokens: finalPromptTokens + finalCompletionTokens,
+            }));
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+            controller.close();
+            break;
+          }
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith('data: ')) continue;
+            const data = trimmed.slice(6);
+            if (data === '[DONE]') continue;
+
+            try {
+              const parsed = JSON.parse(data);
+
+              if (parsed.type === 'message_start' && parsed.message) {
+                if (parsed.message.id) responseId = parsed.message.id;
+                if (parsed.message.usage?.input_tokens !== undefined) {
+                  inputTokensFromUsage = parsed.message.usage.input_tokens;
+                }
+                ensureRole(controller);
+                continue;
+              }
+
+              if (parsed.type === 'content_block_start' && parsed.content_block?.type === 'tool_use') {
+                ensureRole(controller);
+                const toolCallIndex = nextToolCallIndex++;
+                const id = parsed.content_block.id || `call_${Date.now().toString(36)}_${toolCallIndex}`;
+                const name = parsed.content_block.name || '';
+                toolBlocks.set(parsed.index, { toolCallIndex, id, name });
+                controller.enqueue(chunk({
+                  tool_calls: [
+                    {
+                      index: toolCallIndex,
+                      id,
+                      type: 'function',
+                      function: { name, arguments: '' },
+                    },
+                  ],
+                }));
+                continue;
+              }
+
+              if (parsed.type === 'content_block_delta' && parsed.delta) {
+                ensureRole(controller);
+                if (parsed.delta.type === 'text_delta') {
+                  const text = parsed.delta.text || '';
+                  accumulatedContentChars += text.length;
+                  controller.enqueue(chunk({ content: text }));
+                } else if (parsed.delta.type === 'input_json_delta') {
+                  const block = toolBlocks.get(parsed.index);
+                  if (block) {
+                    const partial = parsed.delta.partial_json || '';
+                    accumulatedContentChars += partial.length;
+                    controller.enqueue(chunk({
+                      tool_calls: [
+                        {
+                          index: block.toolCallIndex,
+                          function: { arguments: partial },
+                        },
+                      ],
+                    }));
+                  }
+                }
+                continue;
+              }
+
+              if (parsed.type === 'message_delta') {
+                finalFinishReason = mapAnthropicStopReasonToOpenAI(parsed.delta?.stop_reason);
+                if (parsed.usage?.output_tokens !== undefined) {
+                  outputTokensFromUsage = parsed.usage.output_tokens;
+                }
+              }
+            } catch {
+              // Ignore malformed SSE payloads and continue streaming valid chunks.
+            }
+          }
+        }
+      } catch (error) {
+        controller.error(error);
       }
     },
     cancel() {
@@ -320,8 +516,10 @@ export async function POST(request: NextRequest) {
   try {
     const startTime = Date.now();
     const userAgent = request.headers.get('user-agent') || undefined;
-    const { response, provider, apiKey } = await relayRequest(body, 'chat', userAgent, rawBody);
+    const passthroughHeaders = collectPassthroughHeaders(request.headers);
+    const { response, provider, apiKey } = await relayRequest(body, 'chat', userAgent, rawBody, passthroughHeaders);
     const latencyMs = Date.now() - startTime;
+    const isAnthropicProvider = provider.headerFormat === 'anthropic';
 
     // 5. Stream or return the response.
     // Gate on response.ok so upstream error bodies (4xx/5xx) fall through to
@@ -333,7 +531,8 @@ export async function POST(request: NextRequest) {
       // through, tally only byte length, and estimate completion tokens once —
       // trading usage precision for near-constant per-byte CPU. Vercel keeps the
       // exact wrapper below.
-      if (isCloudflareSync()) {
+      // Anthropic fallback must be translated, so large CF streams can exceed the CPU budget.
+      if (isCloudflareSync() && !isAnthropicProvider) {
         const cfBody = createByteCountingStream(response.body, (totalBytes) => {
           // Schedule usage recording in the background so slow D1/log writes
           // don't delay the client's stream close. See runAfterResponse.
@@ -379,15 +578,25 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      const wrappedBody = wrapStreamWithUsageTracking(
-        response.body,
-        apiKey.hash,
-        provider.name,
-        body.model,
-        startTime,
-        estimatedPromptTokens,
-        traceId
-      );
+      const wrappedBody = isAnthropicProvider
+        ? wrapAnthropicStreamToOpenAI(
+            response.body,
+            apiKey.hash,
+            provider.name,
+            body.model,
+            startTime,
+            estimatedPromptTokens,
+            traceId
+          )
+        : wrapStreamWithUsageTracking(
+            response.body,
+            apiKey.hash,
+            provider.name,
+            body.model,
+            startTime,
+            estimatedPromptTokens,
+            traceId
+          );
       return new Response(wrappedBody, {
         status: response.status,
         headers: {
@@ -399,14 +608,22 @@ export async function POST(request: NextRequest) {
         },
       });
     } else {
-      const responseBody = await response.text();
+      let responseBody = await response.text();
 
       // Track usage for non-streaming (ONLY place — no duplicate from relay.ts)
       if (response.ok) {
         try {
           const data = JSON.parse(responseBody);
-          let promptTokens = data.usage?.prompt_tokens || 0;
-          let completionTokens = data.usage?.completion_tokens || 0;
+          let promptTokens = isAnthropicProvider
+            ? (data.usage?.input_tokens || 0)
+            : (data.usage?.prompt_tokens || 0);
+          let completionTokens = isAnthropicProvider
+            ? (data.usage?.output_tokens || 0)
+            : (data.usage?.completion_tokens || 0);
+
+          if (isAnthropicProvider) {
+            responseBody = JSON.stringify(transformAnthropicMessageToOpenAIChat(data, body.model));
+          }
 
           // Fallback: if upstream doesn't return usage, estimate from response text
           if (!data.usage || (promptTokens === 0 && completionTokens === 0)) {

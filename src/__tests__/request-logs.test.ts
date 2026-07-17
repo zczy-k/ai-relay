@@ -1,10 +1,10 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { __requestLogStoreForTests, listRequestLogs, recordRequestLog, sanitizeDiagnosticText } from '../lib/observability/request-logs';
+import { __requestLogStoreForTests, enableRequestLogCapture, listRequestLogs, recordRequestLog, sanitizeDiagnosticText } from '../lib/observability/request-logs';
 
 describe('request log observability', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.unstubAllEnvs();
-    __requestLogStoreForTests.clear();
+    await __requestLogStoreForTests.clear();
   });
 
   it('sanitizes bearer tokens and sk-style secrets from diagnostics', () => {
@@ -18,6 +18,7 @@ describe('request log observability', () => {
 
   it('records and filters request logs in memory', async () => {
     vi.stubEnv('ENABLE_REQUEST_LOGS', 'true');
+    await enableRequestLogCapture(300);
 
     await recordRequestLog({
       traceId: 'trace_success',
@@ -71,6 +72,7 @@ describe('request log observability', () => {
   it('respects max entries limit', async () => {
     vi.stubEnv('ENABLE_REQUEST_LOGS', 'true');
     vi.stubEnv('REQUEST_LOGS_MAX_ENTRIES', '3');
+    await enableRequestLogCapture(300);
 
     for (let i = 0; i < 5; i++) {
       await recordRequestLog({

@@ -50,6 +50,12 @@ export interface ProviderCostWeight {
 
 /** Routing configuration stored in KV */
 export interface RoutingConfig {
+  /**
+   * Master switch. When true, smart routing fully takes over provider
+   * selection and failover — priority rules and traditional fallback chains
+   * are disabled. When false, smart routing is inert regardless of updatedAt.
+   */
+  enabled: boolean;
   strategy: RoutingStrategy;
   /** Cost weights — only used when strategy is 'cost' */
   costWeights: ProviderCostWeight[];
@@ -65,6 +71,12 @@ export interface RoutingConfig {
   providerTimeoutMs: Record<string, number>;
   /** Max retries per provider */
   maxRetries: number;
+  /**
+   * Tolerance (percent) for keeping the originally-resolved provider. If its
+   * score is within this percentage of the best candidate's score, it is kept
+   * rather than switched, to avoid churn on marginal differences. Default 20.
+   */
+  preferredProviderTolerancePercent: number;
   updatedAt: number;
 }
 
@@ -92,6 +104,7 @@ export interface RoutingStatus {
 
 /** Default routing config */
 export const DEFAULT_ROUTING_CONFIG: RoutingConfig = {
+  enabled: false,
   strategy: 'latency',
   costWeights: [],
   maxLatencyMs: 2000,
@@ -100,5 +113,6 @@ export const DEFAULT_ROUTING_CONFIG: RoutingConfig = {
   stickySession: false,
   providerTimeoutMs: {},
   maxRetries: 3,
+  preferredProviderTolerancePercent: 20,
   updatedAt: 0,
 };

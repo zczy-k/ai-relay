@@ -23,6 +23,7 @@ interface ProviderHealthInfo {
 }
 
 interface RoutingConfig {
+  enabled: boolean;
   strategy: RoutingStrategy;
   costWeights: Array<{ provider: string; costPerMillionTokens: number; weight: number }>;
   maxLatencyMs: number;
@@ -31,6 +32,7 @@ interface RoutingConfig {
   stickySession: boolean;
   providerTimeoutMs: Record<string, number>;
   maxRetries: number;
+  preferredProviderTolerancePercent: number;
   updatedAt: number;
 }
 
@@ -63,9 +65,7 @@ interface RoutingTabProps {
 
 const T = {
   zh: {
-    title: '⚡ 智能路由',
     loading: '加载中...',
-    error: '请求失败',
     retry: '重试',
     noData: '暂无路由数据',
 
@@ -78,13 +78,10 @@ const T = {
     availability: '可用性优先',
     availabilityDesc: '优先保证服务可用',
     currentStrategy: '当前策略',
-    switchStrategy: '切换策略',
     strategySwitched: '策略已切换',
 
     // Topology
     topology: '路由拓扑',
-    provider: 'Provider',
-    status: '状态',
     latency_label: '延迟',
     successRate: '成功率',
     failures: '连续失败',
@@ -99,7 +96,7 @@ const T = {
     // Config
     config: '路由配置',
     failureThreshold: '故障转移阈值',
-    failureThresholdDesc: '连续失败 N 次后切换 Provider',
+    failureThresholdDesc: '连续失败 N 次后切换 Provider（仅智能路由模式）',
     recoverySeconds: '恢复检测时间',
     recoverySecondsDesc: '稳定 N 秒后自动恢复',
     stickySession: '会话粘滞',
@@ -108,6 +105,8 @@ const T = {
     maxRetriesDesc: '单次请求最大重试次数',
     maxLatencyMs: '最大延迟',
     maxLatencyMsDesc: '延迟优先策略下的最大可接受延迟（ms）',
+    preferredTolerance: '偏好供应商容忍度',
+    preferredToleranceDesc: '当原始供应商评分在最优供应商的 N% 以内时仍优先保留，避免在差距很小时频繁切换',
     save: '保存配置',
     saving: '保存中...',
     configSaved: '配置已保存',
@@ -115,22 +114,14 @@ const T = {
     // Switches
     recentSwitches: '最近路由切换',
     noSwitches: '暂无切换记录',
-    from: '从',
-    to: '到',
-    reason: '原因',
 
     // Status overlay
     activeRouting: '当前活跃路由',
     totalRequests: '总请求数',
     uptime: '运行时长',
-
-    // Mobile
-    providerList: 'Provider 列表',
   },
   en: {
-    title: '⚡ Smart Routing',
     loading: 'Loading...',
-    error: 'Request Failed',
     retry: 'Retry',
     noData: 'No routing data',
 
@@ -142,12 +133,9 @@ const T = {
     availability: 'Availability First',
     availabilityDesc: 'Prioritize service availability',
     currentStrategy: 'Current Strategy',
-    switchStrategy: 'Switch Strategy',
     strategySwitched: 'Strategy switched',
 
     topology: 'Routing Topology',
-    provider: 'Provider',
-    status: 'Status',
     latency_label: 'Latency',
     successRate: 'Success Rate',
     failures: 'Consecutive Failures',
@@ -161,7 +149,7 @@ const T = {
 
     config: 'Routing Config',
     failureThreshold: 'Failover Threshold',
-    failureThresholdDesc: 'Switch provider after N consecutive failures',
+    failureThresholdDesc: 'Switch provider after N consecutive failures (smart routing mode only)',
     recoverySeconds: 'Recovery Time',
     recoverySecondsDesc: 'Auto-recover after N seconds of stability',
     stickySession: 'Sticky Session',
@@ -170,21 +158,18 @@ const T = {
     maxRetriesDesc: 'Maximum retries per request',
     maxLatencyMs: 'Max Latency',
     maxLatencyMsDesc: 'Max acceptable latency for latency-first (ms)',
+    preferredTolerance: 'Preferred Provider Tolerance',
+    preferredToleranceDesc: 'Keep the original provider when its score is within N% of the best, to avoid churn on marginal differences',
     save: 'Save Config',
     saving: 'Saving...',
     configSaved: 'Config saved',
 
     recentSwitches: 'Recent Switches',
     noSwitches: 'No switch records',
-    from: 'From',
-    to: 'To',
-    reason: 'Reason',
 
     activeRouting: 'Active Routing',
     totalRequests: 'Total Requests',
     uptime: 'Uptime',
-
-    providerList: 'Provider List',
   },
 };
 
@@ -241,6 +226,7 @@ function strategyIcon(s: RoutingStrategy): string {
 }
 
 const DEFAULT_CONFIG: RoutingConfig = {
+  enabled: false,
   strategy: 'latency',
   costWeights: [],
   maxLatencyMs: 2000,
@@ -249,6 +235,7 @@ const DEFAULT_CONFIG: RoutingConfig = {
   stickySession: false,
   providerTimeoutMs: {},
   maxRetries: 3,
+  preferredProviderTolerancePercent: 20,
   updatedAt: 0,
 };
 
@@ -391,6 +378,10 @@ export default function RoutingTab({ apiKey, lang }: RoutingTabProps) {
 
   return (
     <div>
+      {/* Smart routing is active whenever this tab is shown — the routing-mode
+          selector (traditional vs. smart) above already persists config.enabled,
+          so there is no separate enable switch here. */}
+
       {/* Status overlay bar */}
       <StatusBar status={status} t={t} />
 
@@ -408,7 +399,7 @@ export default function RoutingTab({ apiKey, lang }: RoutingTabProps) {
         gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
         gap: '1.5rem',
         marginTop: '1.5rem',
-      }}>
+      }} className="routing-grid">
         {/* Provider Topology */}
         <ProviderTopology
           providers={status?.activeProviders || []}
@@ -464,7 +455,10 @@ function btnStyle(bg: string): React.CSSProperties {
     padding: '0.5rem 1rem',
     borderRadius: '8px',
     border: 'none',
-    backgroundColor: bg,
+    // `background` (not `backgroundColor`) so callers can pass a gradient —
+    // the save button uses linear-gradient(...), which backgroundColor ignores,
+    // leaving the button transparent and the white label unreadable.
+    background: bg,
     color: '#fff',
     cursor: 'pointer',
     fontSize: '0.85rem',
@@ -838,6 +832,18 @@ function ConfigEditor({
             onChange={(v) => setEditConfig(prev => ({ ...prev, maxLatencyMs: v }))}
           />
         )}
+
+        {/* Preferred-provider tolerance */}
+        <ConfigSlider
+          label={t.preferredTolerance}
+          desc={t.preferredToleranceDesc}
+          value={config.preferredProviderTolerancePercent}
+          min={0}
+          max={100}
+          step={5}
+          unit="%"
+          onChange={(v) => setEditConfig(prev => ({ ...prev, preferredProviderTolerancePercent: v }))}
+        />
 
         {/* Sticky Session toggle */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
